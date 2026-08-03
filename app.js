@@ -1,4 +1,4 @@
-const state = { records: [], openDeliveries: [], selectedDelivery: null, drafts: [], editingDraftId: null };
+const state = { records: [], openDeliveries: [], selectedDelivery: null, drafts: [], editingDraftId: null, autoSaveTimer: null, autoSaveBusy: false };
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const config = {
@@ -85,7 +85,7 @@ $("#loginForm").addEventListener("submit", async event => {
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || "Login failed.");
     sessionStorage.setItem("movementSessionToken", body.token); sessionStorage.setItem("movementSessionUser", body.user);
-    $("#loginPin").value = ""; $("#loginDialog").close(); updateCurrentUser(); showToast(`Logged in as ${body.user}.`); loadDrafts();
+    $("#loginPin").value = ""; $("#loginDialog").close(); updateCurrentUser(); showToast(`Logged in as ${body.user}.`); new URLSearchParams(location.search).get("delivery") ? switchView("receive") : loadDrafts();
   } catch (error) { showToast(error.message, true); }
   finally { button.disabled = false; button.textContent = "Log in"; }
 });
@@ -106,7 +106,7 @@ function addDispatchItem(initial = {}) {
   card.querySelector(".pieces-per-unit").value = initial.piecesPerUnit || "";
   type.addEventListener("change", () => updateItemCard(card));
   unit.addEventListener("change", () => updateItemCard(card));
-  card.querySelector(".remove-item").addEventListener("click", () => { card.remove(); renumberItems(); });
+  card.querySelector(".remove-item").addEventListener("click", () => { card.remove(); renumberItems(); scheduleAutoSave(); });
   updateItemCard(card);
   renumberItems();
 }
@@ -171,6 +171,7 @@ function pendingDispatchRequestId() {
 }
 
 function resetDispatchForm() {
+  clearTimeout(state.autoSaveTimer);
   $("#dispatchForm").reset();
   $("#dispatchItems").innerHTML = "";
   addDispatchItem();
@@ -178,6 +179,8 @@ function resetDispatchForm() {
   state.editingDraftId = null;
   $("#draftId").value = "";
   $("#draftState").textContent = "You are preparing a new delivery.";
+  $("#abandonDraft").disabled = true; $("#deleteDraft").disabled = true;
+  updateOnBehalf();
 }
 
 function populateDraft(record) {
@@ -192,7 +195,9 @@ function populateDraft(record) {
   (record.items?.length ? record.items : [{}]).forEach(addDispatchItem);
   $("#releaseSignature").clearSignature();
   state.editingDraftId = record.id;
-  $("#draftState").textContent = `Editing saved draft ${record.id}. Changes are not saved until you select Save Draft.`;
+  $("#draftState").textContent = `Editing saved draft ${record.id}. Changes will save automatically after you make edits.`;
+  $("#abandonDraft").disabled = false; $("#deleteDraft").disabled = false;
+  updateOnBehalf();
 }
 
 async function loadDrafts(selectedId = state.editingDraftId) {
@@ -212,24 +217,54 @@ $("#draftId").addEventListener("change", event => {
   if (draft) populateDraft(draft);
 });
 
-$("#saveDraft").addEventListener("click", async () => {
+async function saveDraft(automatic = false) {
+  if (automatic && (!state.editingDraftId || state.autoSaveBusy)) return;
   const form = $("#dispatchForm");
   const data = { ...dispatchHeaderData(form), items: collectDraftItems() };
   const button = $("#saveDraft");
-  button.disabled = true; button.textContent = "Saving Draft…";
+  state.autoSaveBusy = true; button.disabled = true; button.textContent = automatic ? "Auto-saving…" : "Saving Draft…";
   try {
     const result = state.editingDraftId
       ? await api(`/drafts/${encodeURIComponent(state.editingDraftId)}`, { method: "PUT", body: JSON.stringify(data) })
       : await api("/drafts", { method: "POST", body: JSON.stringify(data) });
     state.editingDraftId = result.record.id;
-    $("#draftState").textContent = `Draft ${result.record.id} is saved. You can close this page and continue later.`;
+    $("#draftState").textContent = `Draft ${result.record.id} saved at ${new Date().toLocaleTimeString("en-MY", { hour: "2-digit", minute: "2-digit" })}. Future edits save automatically.`;
+    $("#abandonDraft").disabled = false; $("#deleteDraft").disabled = false;
     await loadDrafts(result.record.id);
-    showToast(`Draft ${result.record.id} saved.`);
+    if (!automatic) showToast(`Draft ${result.record.id} saved. Automatic saving is now active.`);
   } catch (error) { showToast(error.message, true); }
-  finally { button.disabled = false; button.textContent = "Save Draft"; }
+  finally { state.autoSaveBusy = false; button.disabled = false; button.textContent = "Save Draft"; }
+}
+$("#saveDraft").addEventListener("click", () => saveDraft(false));
+function scheduleAutoSave() {
+  if (!state.editingDraftId) return;
+  clearTimeout(state.autoSaveTimer);
+  $("#draftState").textContent = `Draft ${state.editingDraftId} has unsaved changes. Auto-saving shortly…`;
+  state.autoSaveTimer = setTimeout(() => saveDraft(true), 15000);
+}
+$("#dispatchForm").addEventListener("input", scheduleAutoSave);
+$("#dispatchForm").addEventListener("change", scheduleAutoSave);
+$("#abandonDraft").addEventListener("click", async () => {
+  if (!state.editingDraftId || !confirm(`Abandon draft ${state.editingDraftId}? It will remain in the audit record.`)) return;
+  try { await api(`/drafts/${encodeURIComponent(state.editingDraftId)}/abandon`, { method: "POST", body: "{}" }); resetDispatchForm(); await loadDrafts(); showToast("Draft abandoned."); } catch (error) { showToast(error.message, true); }
+});
+$("#deleteDraft").addEventListener("click", async () => {
+  if (!state.editingDraftId || !confirm(`Permanently delete draft ${state.editingDraftId}?`)) return;
+  try { await api(`/drafts/${encodeURIComponent(state.editingDraftId)}`, { method: "DELETE" }); resetDispatchForm(); await loadDrafts(); showToast("Draft deleted."); } catch (error) { showToast(error.message, true); }
 });
 
-$("#addItem").addEventListener("click", () => addDispatchItem());
+function updateOnBehalf() {
+  const release = $("#dispatchForm").elements.releasedBy?.value;
+  const receive = $("#receiveForm").elements.receivedBy?.value;
+  $("#dispatchOnBehalf").classList.toggle("hidden", !release || release === config.user);
+  $("#receiveOnBehalf").classList.toggle("hidden", !receive || receive === config.user);
+  if (!release || release === config.user) $("#dispatchOnBehalfCheck").checked = false;
+  if (!receive || receive === config.user) $("#receiveOnBehalfCheck").checked = false;
+}
+$("#dispatchForm").elements.releasedBy.addEventListener("change", updateOnBehalf);
+$("#receiveForm").elements.receivedBy.addEventListener("change", updateOnBehalf);
+
+$("#addItem").addEventListener("click", () => { addDispatchItem(); scheduleAutoSave(); });
 addDispatchItem();
 
 $("#dispatchForm").addEventListener("submit", async event => {
@@ -240,16 +275,18 @@ $("#dispatchForm").addEventListener("submit", async event => {
   let items;
   try { items = collectDispatchItems(); } catch (error) { return showToast(error.message, true); }
   const data = dispatchHeaderData(form);
+  if (data.releasedBy !== config.user && !$("#dispatchOnBehalfCheck").checked) return showToast("Confirm that you are entering this dispatch on behalf of the selected PIC.", true);
   data.items = items;
   data.signature = signature;
   data.requestId = pendingDispatchRequestId();
+  data.enteredOnBehalf = data.releasedBy !== config.user;
   const button = form.querySelector("[type=submit]");
   button.disabled = true; button.textContent = "Saving…";
   try {
     const result = state.editingDraftId
       ? await api(`/drafts/${encodeURIComponent(state.editingDraftId)}/dispatch`, { method: "POST", body: JSON.stringify(data) })
       : await api("/records", { method: "POST", body: JSON.stringify(data) });
-    sessionStorage.removeItem("pendingDispatchRequestId"); resetDispatchForm(); await loadDrafts();
+    sessionStorage.removeItem("pendingDispatchRequestId"); showQr(result.record.id); resetDispatchForm(); await loadDrafts();
     showToast(`Delivery ${result.record.id} dispatched.`);
   } catch (error) { showToast(error.message, true); }
   finally { button.disabled = false; button.textContent = "Confirm Dispatch"; }
@@ -269,6 +306,8 @@ async function loadOpenDeliveries() {
     state.openDeliveries = records.filter(record => ["IN_TRANSIT", "INCOMPLETE"].includes(normalizedStatus(record.status)));
     select.innerHTML = `<option value="">Select Delivery ID</option>` + state.openDeliveries.map(record => `<option value="${escapeHtml(record.id)}">${escapeHtml(record.id)} — ${escapeHtml(record.direction || "Legacy transfer")} — ${normalizedItems(record).length} item(s) — ${normalizedStatus(record.status).replaceAll("_", " ")}</option>`).join("");
     if (!state.openDeliveries.length) select.innerHTML = `<option value="">No open deliveries</option>`;
+    const requested = new URLSearchParams(location.search).get("delivery");
+    if (requested && state.openDeliveries.some(record => record.id === requested)) { select.value = requested; select.dispatchEvent(new Event("change")); history.replaceState({}, "", location.pathname); }
   } catch (error) { select.innerHTML = `<option value="">Unable to load deliveries</option>`; showToast(error.message, true); }
 }
 
@@ -286,25 +325,36 @@ $("#deliveryId").addEventListener("change", async event => {
 });
 
 function renderReceiveItems(record) {
-  const previous = new Map((record.receivedItems || []).map(item => [item.itemId, item]));
+  const totals = cumulativeTotals(record);
   $("#receiveItems").innerHTML = normalizedItems(record).map((item, index) => {
-    const prior = previous.get(item.itemId) || {};
-    return `<article class="receive-card" data-item-id="${escapeHtml(item.itemId)}">
-      <div class="receive-card-title"><div><span>Item ${index + 1}</span><strong>${escapeHtml(item.description)}</strong></div><label class="present-check"><input class="item-present" type="checkbox" ${prior.present ? "checked" : ""}> Item present</label></div>
+    const priorQuantity = totals.get(item.itemId) || 0;
+    const outstanding = Math.max(Number(item.quantity) - priorQuantity, 0);
+    const complete = outstanding === 0;
+    return `<article class="receive-card${complete ? " item-complete" : ""}" data-item-id="${escapeHtml(item.itemId)}" data-prior="${priorQuantity}">
+      <div class="receive-card-title"><div><span>Item ${index + 1}</span><strong>${escapeHtml(item.description)}</strong></div><label class="present-check"><input class="item-present" type="checkbox" ${complete ? "checked disabled" : ""}> ${complete ? "Complete" : "Item present"}</label></div>
       <div class="expected-grid">
         <div><span>Type</span><strong>${item.type === "BATCH" ? "Tinplate batch" : "Component"}</strong></div>
         ${item.type === "BATCH" ? `<div><span>Batch</span><strong>${escapeHtml(item.batchNumber)}</strong></div><div><span>Size</span><strong>${escapeHtml(item.size)}</strong></div>` : ""}
-        <div><span>Expected</span><strong>${item.quantity} ${escapeHtml(item.unit)}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} pieces` : ""}</strong></div>
+        <div><span>Expected</span><strong>${item.quantity} ${escapeHtml(item.unit)}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} pieces` : ""}</strong></div><div><span>Previously received</span><strong>${priorQuantity}</strong></div><div><span>Outstanding</span><strong>${outstanding}</strong></div>
       </div>
       <div class="form-grid check-fields">
-        <label>Actual quantity received<input class="actual-quantity" type="number" min="0" step="0.01" value="${prior.quantityReceived ?? item.quantity}" required></label>
-        ${item.piecesPerUnit ? `<label>Actual pieces per bag<input class="actual-per-unit" type="number" min="0" step="1" value="${prior.piecesPerUnitReceived ?? item.piecesPerUnit}" required></label>` : ""}
+        <label>Quantity received this time<input class="actual-quantity" type="number" min="0" step="0.01" value="${complete ? 0 : outstanding}" ${complete ? "readonly" : "required"}></label>
+        ${item.piecesPerUnit ? `<label>Actual pieces per bag<input class="actual-per-unit" type="number" min="0" step="1" value="${item.piecesPerUnit}" ${complete ? "readonly" : "required"}></label>` : ""}
+        <label>Discrepancy reason<select class="discrepancy-reason" ${complete ? "disabled" : ""}><option value="">Select when item is incomplete</option><option>Item missing</option><option>Quantity short</option><option>Quantity excess</option><option>Wrong item</option><option>Wrong batch/size</option><option>Damaged</option><option>Packaging broken</option><option>Other</option></select></label>
       </div>
       <div class="match-result" aria-live="polite"></div>
     </article>`;
   }).join("");
-  $$("#receiveItems input").forEach(input => input.addEventListener("input", updateReceiveMatches));
+  $$("#receiveItems input, #receiveItems select").forEach(input => input.addEventListener("input", updateReceiveMatches));
   updateReceiveMatches();
+}
+
+function cumulativeTotals(record) {
+  const totals = new Map();
+  const attempts = record.receiptAttempts || [];
+  if (attempts.length) attempts.forEach(attempt => (attempt.items || []).forEach(item => totals.set(item.itemId, (totals.get(item.itemId) || 0) + Number(item.quantityReceived || 0))));
+  else (record.receivedItems || []).forEach(item => totals.set(item.itemId, Number(item.cumulativeQuantity ?? item.quantityReceived ?? 0)));
+  return totals;
 }
 
 function collectReceivedItems() {
@@ -314,8 +364,10 @@ function collectReceivedItems() {
     const present = card.querySelector(".item-present").checked;
     const quantityReceived = Number(card.querySelector(".actual-quantity").value || 0);
     const piecesPerUnitReceived = card.querySelector(".actual-per-unit") ? Number(card.querySelector(".actual-per-unit").value || 0) : null;
-    const matched = present && quantityReceived === Number(item.quantity) && (item.piecesPerUnit == null || piecesPerUnitReceived === Number(item.piecesPerUnit));
-    return { itemId: item.itemId, present, quantityReceived, piecesPerUnitReceived, matched };
+    const priorQuantity = Number(card.dataset.prior || 0);
+    const cumulativeQuantity = priorQuantity + quantityReceived;
+    const matched = (present || priorQuantity >= Number(item.quantity)) && cumulativeQuantity === Number(item.quantity) && (item.piecesPerUnit == null || quantityReceived === 0 || piecesPerUnitReceived === Number(item.piecesPerUnit));
+    return { itemId: item.itemId, present: present || priorQuantity >= Number(item.quantity), quantityReceived, piecesPerUnitReceived, priorQuantity, cumulativeQuantity, matched, discrepancyReason: card.querySelector(".discrepancy-reason")?.value || "" };
   });
 }
 
@@ -325,7 +377,8 @@ function updateReceiveMatches() {
   results.forEach((result, index) => {
     const box = $$("#receiveItems .match-result")[index];
     box.className = `match-result ${result.matched ? "matched" : "mismatch"}`;
-    box.textContent = result.matched ? "✓ Item and quantity match" : "! Missing item or quantity mismatch";
+    const expected = normalizedItems(state.selectedDelivery).find(item => item.itemId === result.itemId);
+    box.textContent = result.matched ? "✓ Cumulative quantity complete" : result.cumulativeQuantity > Number(expected.quantity) ? `! Quantity exceeds expected by ${result.cumulativeQuantity - Number(expected.quantity)}` : `! ${Number(expected.quantity) - result.cumulativeQuantity} still outstanding`;
   });
 }
 
@@ -338,9 +391,12 @@ $("#receiveForm").addEventListener("submit", async event => {
   const receivedItems = collectReceivedItems();
   const allMatched = receivedItems.every(item => item.matched);
   const data = Object.fromEntries(new FormData(form));
+  if (data.receivedBy !== config.user && !$("#receiveOnBehalfCheck").checked) return showToast("Confirm that you are entering this receipt on behalf of the selected PIC.", true);
+  if (receivedItems.some(item => !item.matched && !item.discrepancyReason)) return showToast("Select a discrepancy reason for every incomplete item.", true);
   if ((!allMatched || data.receiptCondition !== "Good") && !data.receivingRemarks.trim()) return showToast("Remarks are required for an incomplete or damaged delivery.", true);
   data.receivedItems = receivedItems;
   data.signature = signature;
+  data.enteredOnBehalf = data.receivedBy !== config.user;
   delete data.deliveryId;
   const button = form.querySelector("[type=submit]"); button.disabled = true; button.textContent = "Saving…";
   try {
@@ -352,17 +408,41 @@ $("#receiveForm").addEventListener("submit", async event => {
 });
 
 async function loadRecords() {
-  $("#recordsBody").innerHTML = `<tr><td colspan="10" class="empty-cell">Loading records…</td></tr>`;
+  $("#recordsBody").innerHTML = `<tr><td colspan="11" class="empty-cell">Loading records…</td></tr>`;
   try { state.records = await api("/records"); renderRecords(); }
-  catch (error) { $("#recordsBody").innerHTML = `<tr><td colspan="10" class="empty-cell">${escapeHtml(error.message)}</td></tr>`; showToast(error.message, true); }
+  catch (error) { $("#recordsBody").innerHTML = `<tr><td colspan="11" class="empty-cell">${escapeHtml(error.message)}</td></tr>`; showToast(error.message, true); }
 }
 
 function recordSearchText(record) { return [record.id, record.direction, record.driverName, record.vehicleNumber, ...normalizedItems(record).flatMap(item => [item.batchNumber, item.size, item.description])].join(" ").toLowerCase(); }
 function filteredRecords() { const term = $("#recordSearch").value.trim().toLowerCase(); const status = $("#statusFilter").value; return state.records.filter(record => (!term || recordSearchText(record).includes(term)) && (!status || normalizedStatus(record.status) === status)); }
 function renderRecords() {
   const records = filteredRecords();
-  $("#recordsBody").innerHTML = records.length ? records.map(record => `<tr><td>${escapeHtml(record.id)}</td><td>${escapeHtml(record.direction || "—")}</td><td>${normalizedItems(record).length}</td><td>${escapeHtml(record.driverName)}</td><td>${escapeHtml(record.vehicleNumber || "—")}</td><td>${escapeHtml(record.dispatchedBy || record.createdBy || "—")}</td><td>${escapeHtml(record.lastUpdatedBy || "—")}</td><td>${formatDate(record.timeOut)}</td><td>${record.timeReceived || record.timeIn ? formatDate(record.timeReceived || record.timeIn) : "—"}</td><td class="status-cell ${normalizedStatus(record.status)}">${normalizedStatus(record.status).replaceAll("_", " ")}</td></tr>`).join("") : `<tr><td colspan="10" class="empty-cell">No matching records.</td></tr>`;
+  $("#recordsBody").innerHTML = records.length ? records.map(record => `<tr><td>${escapeHtml(record.id)}</td><td>${escapeHtml(record.direction || "—")}</td><td>${normalizedItems(record).length}</td><td>${escapeHtml(record.driverName)}</td><td>${escapeHtml(record.vehicleNumber || "—")}</td><td>${escapeHtml(record.dispatchedBy || record.createdBy || "—")}</td><td>${escapeHtml(record.lastUpdatedBy || "—")}</td><td>${formatDate(record.timeOut)}</td><td>${record.timeReceived || record.timeIn ? formatDate(record.timeReceived || record.timeIn) : "—"}</td><td class="status-cell ${normalizedStatus(record.status)}">${normalizedStatus(record.status).replaceAll("_", " ")}</td><td><button class="secondary correct-record" data-id="${escapeHtml(record.id)}" type="button">Correct</button></td></tr>`).join("") : `<tr><td colspan="11" class="empty-cell">No matching records.</td></tr>`;
 }
+$("#recordsBody").addEventListener("click", event => { const button = event.target.closest(".correct-record"); if (button) openCorrection(state.records.find(record => record.id === button.dataset.id)); });
+
+const deliveryCorrectionFields = ["direction","driverName","vehicleNumber","releasedBy","purpose","remarks"];
+const itemCorrectionFields = ["batchNumber","size","description","quantity","unit","piecesPerUnit"];
+function openCorrection(record) {
+  $("#correctionDeliveryId").value = record.id;
+  $("#correctionTarget").innerHTML = `<option value="DELIVERY">Delivery details</option>` + normalizedItems(record).map((item, index) => `<option value="${escapeHtml(item.itemId)}">Item ${index + 1}: ${escapeHtml(item.description)}</option>`).join("");
+  updateCorrectionFields(); $("#correctionValue").value = ""; $("#correctionReason").value = ""; $("#correctionDialog").showModal();
+}
+function updateCorrectionFields() { const fields = $("#correctionTarget").value === "DELIVERY" ? deliveryCorrectionFields : itemCorrectionFields; $("#correctionField").innerHTML = fields.map(field => `<option value="${field}">${field.replace(/([A-Z])/g, " $1")}</option>`).join(""); }
+$("#correctionTarget").addEventListener("change", updateCorrectionFields);
+$("#closeCorrection").addEventListener("click", () => $("#correctionDialog").close());
+$("#correctionForm").addEventListener("submit", async event => {
+  event.preventDefault(); const button = event.currentTarget.querySelector("[type=submit]"); button.disabled = true;
+  try { await api(`/records/${encodeURIComponent($("#correctionDeliveryId").value)}/corrections`, { method: "POST", body: JSON.stringify({ target: $("#correctionTarget").value, field: $("#correctionField").value, value: $("#correctionValue").value, reason: $("#correctionReason").value.trim() }) }); $("#correctionDialog").close(); await loadRecords(); showToast("Correction saved with its audit history."); } catch (error) { showToast(error.message, true); } finally { button.disabled = false; }
+});
+
+function showQr(id) {
+  const url = new URL(location.href); url.search = ""; url.hash = ""; url.searchParams.set("delivery", id);
+  const qr = qrcode(0, "M"); qr.addData(url.toString()); qr.make();
+  $("#qrDeliveryId").textContent = id; $("#qrCode").innerHTML = qr.createImgTag(6, 8); $("#qrDialog").showModal();
+}
+$("#closeQr").addEventListener("click", () => $("#qrDialog").close());
+$("#printQr").addEventListener("click", () => window.print());
 $("#refreshRecords").addEventListener("click", loadRecords);
 $("#recordSearch").addEventListener("input", renderRecords);
 $("#statusFilter").addEventListener("change", renderRecords);
@@ -383,4 +463,4 @@ function escapeHtml(value = "") { return String(value).replace(/[&<>"']/g, chara
 updateCurrentUser();
 if (!config.apiUrl) setTimeout(() => $("#settingsDialog").showModal(), 350);
 else if (!config.token) setTimeout(showLogin, 350);
-else loadDrafts();
+else new URLSearchParams(location.search).get("delivery") ? switchView("receive") : loadDrafts();

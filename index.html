@@ -36,6 +36,8 @@
         </label>
         <button id="refreshDrafts" class="secondary" type="button">Refresh Drafts</button>
         <button id="newDraft" class="secondary" type="button">New Delivery</button>
+        <button id="abandonDraft" class="secondary danger-button" type="button" disabled>Abandon</button>
+        <button id="deleteDraft" class="secondary danger-button" type="button" disabled>Delete</button>
       </div>
       <p id="draftState" class="draft-state">You are preparing a new delivery.</p>
 
@@ -83,6 +85,7 @@
           <canvas id="releaseSignature" class="signature" aria-label="Releasing person-in-charge signature"></canvas>
           <button class="link-button clear-signature" data-canvas="releaseSignature" type="button">Clear signature</button>
         </div>
+        <label id="dispatchOnBehalf" class="on-behalf hidden"><input id="dispatchOnBehalfCheck" type="checkbox"> I confirm that I am entering this dispatch on behalf of the selected releasing PIC.</label>
         <div class="form-actions">
           <button id="saveDraft" class="secondary submit-button" type="button">Save Draft</button>
           <button class="primary submit-button" type="submit">Confirm Dispatch</button>
@@ -127,6 +130,7 @@
           <canvas id="receiveSignature" class="signature" aria-label="Receiving person-in-charge signature"></canvas>
           <button class="link-button clear-signature" data-canvas="receiveSignature" type="button">Clear signature</button>
         </div>
+        <label id="receiveOnBehalf" class="on-behalf hidden"><input id="receiveOnBehalfCheck" type="checkbox"> I confirm that I am entering this receipt on behalf of the selected receiving PIC.</label>
         <button class="primary submit-button" type="submit">Confirm Item Check</button>
       </form>
     </section>
@@ -141,8 +145,8 @@
         <select id="statusFilter"><option value="">All statuses</option><option value="DRAFT">Draft</option><option value="IN_TRANSIT">In Transit</option><option value="INCOMPLETE">Incomplete</option><option value="RECEIVED">Received</option></select>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Delivery ID</th><th>Direction</th><th>Items</th><th>Driver</th><th>Vehicle</th><th>Dispatch User</th><th>Receiving User</th><th>Dispatched</th><th>Received</th><th>Status</th></tr></thead>
-        <tbody id="recordsBody"><tr><td colspan="10" class="empty-cell">Select Refresh to load records.</td></tr></tbody>
+        <thead><tr><th>Delivery ID</th><th>Direction</th><th>Items</th><th>Driver</th><th>Vehicle</th><th>Dispatch User</th><th>Receiving User</th><th>Dispatched</th><th>Received</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="recordsBody"><tr><td colspan="11" class="empty-cell">Select Refresh to load records.</td></tr></tbody>
       </table></div>
     </section>
   </main>
@@ -178,7 +182,26 @@
     <button id="loginButton" class="primary" type="submit">Log in</button>
   </form></dialog>
 
+  <dialog id="qrDialog"><div class="dialog-content">
+    <div class="dialog-heading"><h2>Delivery Dispatched</h2><button id="closeQr" class="icon-button" type="button" aria-label="Close">×</button></div>
+    <p>Attach or show this QR code with the delivery. Scanning it opens the correct Delivery ID.</p>
+    <strong id="qrDeliveryId" class="large-id"></strong><div id="qrCode" class="qr-code"></div>
+    <button id="printQr" class="primary" type="button">Print QR Slip</button>
+  </div></dialog>
+
+  <dialog id="correctionDialog"><form id="correctionForm">
+    <div class="dialog-heading"><h2>Correct Delivery Record</h2><button class="icon-button" id="closeCorrection" type="button" aria-label="Close">×</button></div>
+    <p>Every correction keeps the original value, logged-in user, reason, date and time.</p>
+    <label>Delivery ID<input id="correctionDeliveryId" readonly></label>
+    <label>Correction target<select id="correctionTarget" required></select></label>
+    <label>Field<select id="correctionField" required></select></label>
+    <label>Corrected value<input id="correctionValue" required></label>
+    <label>Reason for correction<textarea id="correctionReason" rows="3" required></textarea></label>
+    <button class="primary" type="submit">Save Correction</button>
+  </form></dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="qrcode.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

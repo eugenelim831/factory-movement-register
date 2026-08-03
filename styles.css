@@ -88,8 +88,18 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
 header .secondary { border-color: rgba(255,255,255,.45); color: white; background: rgba(255,255,255,.1); }
 .submit-button { width: 100%; margin-top: 24px; min-height: 52px; }
 .form-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.draft-bar { display: grid; grid-template-columns: minmax(240px, 1fr) auto auto; gap: 10px; align-items: end; margin-bottom: 8px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #f7faf9; }
+.draft-bar { display: grid; grid-template-columns: minmax(240px, 1fr) repeat(4, auto); gap: 10px; align-items: end; margin-bottom: 8px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #f7faf9; }
 .draft-state { margin-bottom: 24px; color: var(--muted); font-weight: 700; }
+.danger-button { color: var(--danger); }
+.on-behalf { display: flex; grid-auto-flow: column; align-items: center; gap: 10px; margin-top: 16px; padding: 13px; border: 1px solid #e1bf7d; border-radius: 10px; background: #fff7e8; }
+.on-behalf input { width: 20px; min-height: 20px; accent-color: var(--green); }
+.dialog-content { display: grid; gap: 16px; padding: 26px; }
+.large-id { text-align: center; font-size: 24px; }
+.qr-code { display: grid; place-items: center; min-height: 260px; }
+.qr-code img { width: min(260px, 100%); height: auto; image-rendering: pixelated; }
+.correction-button { min-height: 34px; padding: 6px 10px; }
+.balance-line { color: var(--muted); font-size: 12px; font-weight: 750; }
+.item-complete { border-color: #9fd0c1; background: #f0faf6; }
 .inline-field { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
 .items-heading { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin: 34px 0 14px; }
 .items-heading h3 { margin-bottom: 0; }
@@ -168,4 +178,10 @@ dialog form { display: grid; gap: 18px; padding: 26px; }
   .items-heading button { width: 100%; }
   .expected-grid { grid-template-columns: 1fr 1fr; }
   .draft-bar, .form-actions { grid-template-columns: 1fr; }
+}
+
+@media print {
+  body > *:not(#qrDialog) { display: none !important; }
+  #qrDialog { position: static; display: block; width: 100%; box-shadow: none; }
+  #qrDialog::backdrop, #closeQr, #printQr { display: none; }
 }
