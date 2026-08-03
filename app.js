@@ -3,7 +3,8 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const config = {
   get apiUrl() { return localStorage.getItem("movementApiUrl") || ""; },
-  get pin() { return localStorage.getItem("movementAppPin") || ""; }
+  get token() { return sessionStorage.getItem("movementSessionToken") || ""; },
+  get user() { return sessionStorage.getItem("movementSessionUser") || ""; }
 };
 
 function showToast(message, error = false) {
@@ -15,9 +16,10 @@ function showToast(message, error = false) {
 }
 
 function requireSettings() {
-  if (config.apiUrl && config.pin) return true;
+  if (config.apiUrl && config.token) return true;
+  if (config.apiUrl && !config.token) { showLogin(); return false; }
   $("#settingsDialog").showModal();
-  showToast("Enter the API address and application PIN first.", true);
+  showToast("Enter the API address first.", true);
   return false;
 }
 
@@ -25,9 +27,10 @@ async function api(path, options = {}) {
   if (!requireSettings()) throw new Error("Connection settings are missing.");
   const response = await fetch(`${config.apiUrl.replace(/\/$/, "")}${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", "X-App-Pin": config.pin, ...(options.headers || {}) }
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${config.token}`, ...(options.headers || {}) }
   });
   const body = await response.json().catch(() => ({}));
+  if (response.status === 401) { sessionStorage.removeItem("movementSessionToken"); sessionStorage.removeItem("movementSessionUser"); updateCurrentUser(); showLogin(); }
   if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
   return body;
 }
@@ -69,8 +72,24 @@ $$(".tab").forEach(button => button.addEventListener("click", () => switchView(b
 $$(".signature").forEach(setupSignature);
 $$(".clear-signature").forEach(button => button.addEventListener("click", () => document.getElementById(button.dataset.canvas).clearSignature()));
 
-$("#settingsButton").addEventListener("click", () => { $("#apiUrl").value = config.apiUrl; $("#appPin").value = config.pin; $("#settingsDialog").showModal(); });
-$("#saveSettings").addEventListener("click", event => { event.preventDefault(); localStorage.setItem("movementApiUrl", $("#apiUrl").value.trim()); localStorage.setItem("movementAppPin", $("#appPin").value); $("#settingsDialog").close(); showToast("Settings saved."); loadDrafts(); });
+$("#settingsButton").addEventListener("click", () => { $("#apiUrl").value = config.apiUrl; $("#settingsDialog").showModal(); });
+$("#saveSettings").addEventListener("click", event => { event.preventDefault(); localStorage.setItem("movementApiUrl", $("#apiUrl").value.trim()); $("#settingsDialog").close(); showToast("Settings saved."); showLogin(); });
+
+function updateCurrentUser() { $("#currentUser").textContent = config.user ? `Signed in: ${config.user}` : "Not signed in"; }
+function showLogin() { if (!config.apiUrl) return $("#settingsDialog").showModal(); if (!$("#loginDialog").open) $("#loginDialog").showModal(); }
+$("#loginForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = $("#loginButton"); button.disabled = true; button.textContent = "Logging in…";
+  try {
+    const response = await fetch(`${config.apiUrl.replace(/\/$/, "")}/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: $("#loginName").value, pin: $("#loginPin").value }) });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || "Login failed.");
+    sessionStorage.setItem("movementSessionToken", body.token); sessionStorage.setItem("movementSessionUser", body.user);
+    $("#loginPin").value = ""; $("#loginDialog").close(); updateCurrentUser(); showToast(`Logged in as ${body.user}.`); loadDrafts();
+  } catch (error) { showToast(error.message, true); }
+  finally { button.disabled = false; button.textContent = "Log in"; }
+});
+$("#logoutButton").addEventListener("click", () => { sessionStorage.removeItem("movementSessionToken"); sessionStorage.removeItem("movementSessionUser"); updateCurrentUser(); showLogin(); });
 
 function addDispatchItem(initial = {}) {
   const fragment = $("#dispatchItemTemplate").content.cloneNode(true);
@@ -145,6 +164,12 @@ function dispatchHeaderData(form) {
   return { direction: data.direction || "", driverName: data.driverName || "", vehicleNumber: data.vehicleNumber || "", releasedBy: data.releasedBy || "", purpose: data.purpose || "", remarks: data.remarks || "" };
 }
 
+function pendingDispatchRequestId() {
+  let id = sessionStorage.getItem("pendingDispatchRequestId");
+  if (!id) { id = crypto.randomUUID(); sessionStorage.setItem("pendingDispatchRequestId", id); }
+  return id;
+}
+
 function resetDispatchForm() {
   $("#dispatchForm").reset();
   $("#dispatchItems").innerHTML = "";
@@ -217,13 +242,14 @@ $("#dispatchForm").addEventListener("submit", async event => {
   const data = dispatchHeaderData(form);
   data.items = items;
   data.signature = signature;
+  data.requestId = pendingDispatchRequestId();
   const button = form.querySelector("[type=submit]");
   button.disabled = true; button.textContent = "Saving…";
   try {
     const result = state.editingDraftId
       ? await api(`/drafts/${encodeURIComponent(state.editingDraftId)}/dispatch`, { method: "POST", body: JSON.stringify(data) })
       : await api("/records", { method: "POST", body: JSON.stringify(data) });
-    resetDispatchForm(); await loadDrafts();
+    sessionStorage.removeItem("pendingDispatchRequestId"); resetDispatchForm(); await loadDrafts();
     showToast(`Delivery ${result.record.id} dispatched.`);
   } catch (error) { showToast(error.message, true); }
   finally { button.disabled = false; button.textContent = "Confirm Dispatch"; }
@@ -326,27 +352,27 @@ $("#receiveForm").addEventListener("submit", async event => {
 });
 
 async function loadRecords() {
-  $("#recordsBody").innerHTML = `<tr><td colspan="8" class="empty-cell">Loading records…</td></tr>`;
+  $("#recordsBody").innerHTML = `<tr><td colspan="10" class="empty-cell">Loading records…</td></tr>`;
   try { state.records = await api("/records"); renderRecords(); }
-  catch (error) { $("#recordsBody").innerHTML = `<tr><td colspan="8" class="empty-cell">${escapeHtml(error.message)}</td></tr>`; showToast(error.message, true); }
+  catch (error) { $("#recordsBody").innerHTML = `<tr><td colspan="10" class="empty-cell">${escapeHtml(error.message)}</td></tr>`; showToast(error.message, true); }
 }
 
 function recordSearchText(record) { return [record.id, record.direction, record.driverName, record.vehicleNumber, ...normalizedItems(record).flatMap(item => [item.batchNumber, item.size, item.description])].join(" ").toLowerCase(); }
 function filteredRecords() { const term = $("#recordSearch").value.trim().toLowerCase(); const status = $("#statusFilter").value; return state.records.filter(record => (!term || recordSearchText(record).includes(term)) && (!status || normalizedStatus(record.status) === status)); }
 function renderRecords() {
   const records = filteredRecords();
-  $("#recordsBody").innerHTML = records.length ? records.map(record => `<tr><td>${escapeHtml(record.id)}</td><td>${escapeHtml(record.direction || "—")}</td><td>${normalizedItems(record).length}</td><td>${escapeHtml(record.driverName)}</td><td>${escapeHtml(record.vehicleNumber || "—")}</td><td>${formatDate(record.timeOut)}</td><td>${record.timeReceived || record.timeIn ? formatDate(record.timeReceived || record.timeIn) : "—"}</td><td class="status-cell ${normalizedStatus(record.status)}">${normalizedStatus(record.status).replaceAll("_", " ")}</td></tr>`).join("") : `<tr><td colspan="8" class="empty-cell">No matching records.</td></tr>`;
+  $("#recordsBody").innerHTML = records.length ? records.map(record => `<tr><td>${escapeHtml(record.id)}</td><td>${escapeHtml(record.direction || "—")}</td><td>${normalizedItems(record).length}</td><td>${escapeHtml(record.driverName)}</td><td>${escapeHtml(record.vehicleNumber || "—")}</td><td>${escapeHtml(record.dispatchedBy || record.createdBy || "—")}</td><td>${escapeHtml(record.lastUpdatedBy || "—")}</td><td>${formatDate(record.timeOut)}</td><td>${record.timeReceived || record.timeIn ? formatDate(record.timeReceived || record.timeIn) : "—"}</td><td class="status-cell ${normalizedStatus(record.status)}">${normalizedStatus(record.status).replaceAll("_", " ")}</td></tr>`).join("") : `<tr><td colspan="10" class="empty-cell">No matching records.</td></tr>`;
 }
 $("#refreshRecords").addEventListener("click", loadRecords);
 $("#recordSearch").addEventListener("input", renderRecords);
 $("#statusFilter").addEventListener("change", renderRecords);
 $("#exportCsv").addEventListener("click", () => {
   if (!state.records.length) return showToast("Load the records before exporting.", true);
-  const headings = ["Delivery ID","Direction","Driver","Vehicle","Released By","Dispatched","Received By","Received Time","Status","Item Type","Batch Number","Size","Description","Expected Quantity","Unit","Pieces Per Bag","Present","Received Quantity","Matched","Condition","Remarks"];
+  const headings = ["Delivery ID","Direction","Driver","Vehicle","Logged-in Dispatch User","Released By PIC","Dispatched","Logged-in Receiving User","Received By PIC","Received Time","Status","Item Type","Batch Number","Size","Description","Expected Quantity","Unit","Pieces Per Bag","Present","Received Quantity","Matched","Condition","Remarks"];
   const rows = [headings];
   filteredRecords().forEach(record => {
     const received = new Map((record.receivedItems || []).map(item => [item.itemId, item]));
-    normalizedItems(record).forEach(item => { const check = received.get(item.itemId) || {}; rows.push([record.id,record.direction,record.driverName,record.vehicleNumber,record.releasedBy,record.timeOut,record.receivedBy,record.timeReceived || record.timeIn,normalizedStatus(record.status),item.type,item.batchNumber,item.size,item.description,item.quantity,item.unit,item.piecesPerUnit ?? "",check.present == null ? "" : check.present ? "Yes" : "No",check.quantityReceived ?? "",check.matched == null ? "" : check.matched ? "Yes" : "No",record.receiptCondition,record.receivingRemarks]); });
+    normalizedItems(record).forEach(item => { const check = received.get(item.itemId) || {}; rows.push([record.id,record.direction,record.driverName,record.vehicleNumber,record.dispatchedBy || record.createdBy,record.releasedBy,record.timeOut,record.lastUpdatedBy,record.receivedBy,record.timeReceived || record.timeIn,normalizedStatus(record.status),item.type,item.batchNumber,item.size,item.description,item.quantity,item.unit,item.piecesPerUnit ?? "",check.present == null ? "" : check.present ? "Yes" : "No",check.quantityReceived ?? "",check.matched == null ? "" : check.matched ? "Yes" : "No",record.receiptCondition,record.receivingRemarks]); });
   });
   const csv = rows.map(row => row.map(value => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
   const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); link.download = `transfer-register-${new Date().toISOString().slice(0,10)}.csv`; link.click(); URL.revokeObjectURL(link.href);
@@ -354,5 +380,7 @@ $("#exportCsv").addEventListener("click", () => {
 
 function formatDate(value) { return value ? new Intl.DateTimeFormat("en-MY", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—"; }
 function escapeHtml(value = "") { return String(value).replace(/[&<>"']/g, character => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" })[character]); }
-if (!config.apiUrl || !config.pin) setTimeout(() => $("#settingsDialog").showModal(), 350);
+updateCurrentUser();
+if (!config.apiUrl) setTimeout(() => $("#settingsDialog").showModal(), 350);
+else if (!config.token) setTimeout(showLogin, 350);
 else loadDrafts();

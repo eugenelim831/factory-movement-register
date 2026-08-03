@@ -14,7 +14,7 @@
       <h1>Transfer Register</h1>
       <p class="subtitle">Record and verify internal deliveries between Store/Slitter and Power Press.</p>
     </div>
-    <button id="settingsButton" class="secondary" type="button">Settings</button>
+    <div class="account-actions"><span id="currentUser">Not signed in</span><button id="logoutButton" class="secondary" type="button">Log out</button><button id="settingsButton" class="secondary" type="button">Settings</button></div>
   </header>
 
   <main>
@@ -64,7 +64,9 @@
               <option value="BMY3682">BMY3682</option>
             </select>
           </label>
-          <label>Released by (person-in-charge)<input name="releasedBy" required autocomplete="off" placeholder="Full name"></label>
+          <label>Released by (person-in-charge)
+            <select name="releasedBy" required><option value="" selected disabled>Select PIC</option><option value="Aung King">Aung King</option><option value="Nadia">Nadia</option><option value="Lina">Lina</option><option value="Lalit">Lalit</option><option value="Yati">Yati</option></select>
+          </label>
           <label class="wide">Purpose / production use<input name="purpose" required autocomplete="off"></label>
         </div>
 
@@ -105,7 +107,9 @@
         <div id="receiveItems" class="receive-list"></div>
 
         <div class="form-grid receive-details">
-          <label>Received by (person-in-charge)<input name="receivedBy" required autocomplete="off" placeholder="Full name"></label>
+          <label>Received by (person-in-charge)
+            <select name="receivedBy" required><option value="" selected disabled>Select PIC</option><option value="Aung King">Aung King</option><option value="Nadia">Nadia</option><option value="Lina">Lina</option><option value="Lalit">Lalit</option><option value="Yati">Yati</option></select>
+          </label>
           <label>Overall condition
             <select name="receiptCondition" required>
               <option value="Good" selected>Good</option>
@@ -137,8 +141,8 @@
         <select id="statusFilter"><option value="">All statuses</option><option value="DRAFT">Draft</option><option value="IN_TRANSIT">In Transit</option><option value="INCOMPLETE">Incomplete</option><option value="RECEIVED">Received</option></select>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Delivery ID</th><th>Direction</th><th>Items</th><th>Driver</th><th>Vehicle</th><th>Dispatched</th><th>Received</th><th>Status</th></tr></thead>
-        <tbody id="recordsBody"><tr><td colspan="8" class="empty-cell">Select Refresh to load records.</td></tr></tbody>
+        <thead><tr><th>Delivery ID</th><th>Direction</th><th>Items</th><th>Driver</th><th>Vehicle</th><th>Dispatch User</th><th>Receiving User</th><th>Dispatched</th><th>Received</th><th>Status</th></tr></thead>
+        <tbody id="recordsBody"><tr><td colspan="10" class="empty-cell">Select Refresh to load records.</td></tr></tbody>
       </table></div>
     </section>
   </main>
@@ -161,10 +165,17 @@
 
   <dialog id="settingsDialog"><form method="dialog">
     <div class="dialog-heading"><h2>Connection Settings</h2><button class="icon-button" value="cancel" aria-label="Close settings">×</button></div>
-    <p>Enter the protected API address and application PIN.</p>
+    <p>Enter the protected API address. Each PIC signs in separately afterward.</p>
     <label>API address<input id="apiUrl" type="url" placeholder="https://your-worker.workers.dev"></label>
-    <label>Application PIN<input id="appPin" type="password" inputmode="numeric"></label>
     <button id="saveSettings" class="primary" value="default">Save Settings</button>
+  </form></dialog>
+
+  <dialog id="loginDialog"><form id="loginForm">
+    <div class="dialog-heading"><h2>PIC Login</h2></div>
+    <p>Select your own name and enter your individual PIN.</p>
+    <label>Your name<select id="loginName" required><option value="" selected disabled>Select your name</option><option value="Aung King">Aung King</option><option value="Nadia">Nadia</option><option value="Lina">Lina</option><option value="Lalit">Lalit</option><option value="Yati">Yati</option></select></label>
+    <label>Your PIN<input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required></label>
+    <button id="loginButton" class="primary" type="submit">Log in</button>
   </form></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
