@@ -1,4 +1,4 @@
-const state = { records: [], openDeliveries: [], selectedDelivery: null };
+const state = { records: [], openDeliveries: [], selectedDelivery: null, drafts: [], editingDraftId: null };
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const config = {
@@ -62,6 +62,7 @@ function switchView(view) {
   $$(".tab").forEach(button => button.classList.toggle("active", button.dataset.view === view));
   $$(".panel").forEach(panel => panel.classList.toggle("active", panel.id === view));
   if (view === "receive") loadOpenDeliveries();
+  if (view === "dispatch") loadDrafts();
 }
 
 $$(".tab").forEach(button => button.addEventListener("click", () => switchView(button.dataset.view)));
@@ -69,7 +70,7 @@ $$(".signature").forEach(setupSignature);
 $$(".clear-signature").forEach(button => button.addEventListener("click", () => document.getElementById(button.dataset.canvas).clearSignature()));
 
 $("#settingsButton").addEventListener("click", () => { $("#apiUrl").value = config.apiUrl; $("#appPin").value = config.pin; $("#settingsDialog").showModal(); });
-$("#saveSettings").addEventListener("click", event => { event.preventDefault(); localStorage.setItem("movementApiUrl", $("#apiUrl").value.trim()); localStorage.setItem("movementAppPin", $("#appPin").value); $("#settingsDialog").close(); showToast("Settings saved."); });
+$("#saveSettings").addEventListener("click", event => { event.preventDefault(); localStorage.setItem("movementApiUrl", $("#apiUrl").value.trim()); localStorage.setItem("movementAppPin", $("#appPin").value); $("#settingsDialog").close(); showToast("Settings saved."); loadDrafts(); });
 
 function addDispatchItem(initial = {}) {
   const fragment = $("#dispatchItemTemplate").content.cloneNode(true);
@@ -126,6 +127,83 @@ function collectDispatchItems() {
   });
 }
 
+function collectDraftItems() {
+  return $$("#dispatchItems .item-card").map((card, index) => ({
+    itemId: `ITEM-${index + 1}`,
+    type: card.querySelector(".item-type").value,
+    batchNumber: card.querySelector(".batch-number").value.trim().replaceAll(" ", ""),
+    size: card.querySelector(".item-size").value.trim().replace(/[×x]/gi, "*").replaceAll(" ", ""),
+    description: card.querySelector(".item-description").value.trim(),
+    quantity: card.querySelector(".item-quantity").value ? Number(card.querySelector(".item-quantity").value) : null,
+    unit: card.querySelector(".item-unit").value,
+    piecesPerUnit: card.querySelector(".pieces-per-unit").value ? Number(card.querySelector(".pieces-per-unit").value) : null
+  }));
+}
+
+function dispatchHeaderData(form) {
+  const data = Object.fromEntries(new FormData(form));
+  return { direction: data.direction || "", driverName: data.driverName || "", vehicleNumber: data.vehicleNumber || "", releasedBy: data.releasedBy || "", purpose: data.purpose || "", remarks: data.remarks || "" };
+}
+
+function resetDispatchForm() {
+  $("#dispatchForm").reset();
+  $("#dispatchItems").innerHTML = "";
+  addDispatchItem();
+  $("#releaseSignature").clearSignature();
+  state.editingDraftId = null;
+  $("#draftId").value = "";
+  $("#draftState").textContent = "You are preparing a new delivery.";
+}
+
+function populateDraft(record) {
+  const form = $("#dispatchForm");
+  form.elements.direction.value = record.direction || "";
+  form.elements.driverName.value = record.driverName || "";
+  form.elements.vehicleNumber.value = record.vehicleNumber || "";
+  form.elements.releasedBy.value = record.releasedBy || "";
+  form.elements.purpose.value = record.purpose || "";
+  form.elements.remarks.value = record.remarks || "";
+  $("#dispatchItems").innerHTML = "";
+  (record.items?.length ? record.items : [{}]).forEach(addDispatchItem);
+  $("#releaseSignature").clearSignature();
+  state.editingDraftId = record.id;
+  $("#draftState").textContent = `Editing saved draft ${record.id}. Changes are not saved until you select Save Draft.`;
+}
+
+async function loadDrafts(selectedId = state.editingDraftId) {
+  try {
+    const records = await api("/records");
+    state.drafts = records.filter(record => record.status === "DRAFT");
+    $("#draftId").innerHTML = `<option value="">New unsaved delivery</option>` + state.drafts.map(record => `<option value="${escapeHtml(record.id)}">${escapeHtml(record.id)} — ${escapeHtml(record.direction || "Direction not set")} — ${record.items?.length || 0} item(s)</option>`).join("");
+    if (selectedId && state.drafts.some(record => record.id === selectedId)) $("#draftId").value = selectedId;
+  } catch (error) { showToast(error.message, true); }
+}
+
+$("#refreshDrafts").addEventListener("click", () => loadDrafts());
+$("#newDraft").addEventListener("click", resetDispatchForm);
+$("#draftId").addEventListener("change", event => {
+  if (!event.target.value) return resetDispatchForm();
+  const draft = state.drafts.find(record => record.id === event.target.value);
+  if (draft) populateDraft(draft);
+});
+
+$("#saveDraft").addEventListener("click", async () => {
+  const form = $("#dispatchForm");
+  const data = { ...dispatchHeaderData(form), items: collectDraftItems() };
+  const button = $("#saveDraft");
+  button.disabled = true; button.textContent = "Saving Draft…";
+  try {
+    const result = state.editingDraftId
+      ? await api(`/drafts/${encodeURIComponent(state.editingDraftId)}`, { method: "PUT", body: JSON.stringify(data) })
+      : await api("/drafts", { method: "POST", body: JSON.stringify(data) });
+    state.editingDraftId = result.record.id;
+    $("#draftState").textContent = `Draft ${result.record.id} is saved. You can close this page and continue later.`;
+    await loadDrafts(result.record.id);
+    showToast(`Draft ${result.record.id} saved.`);
+  } catch (error) { showToast(error.message, true); }
+  finally { button.disabled = false; button.textContent = "Save Draft"; }
+});
+
 $("#addItem").addEventListener("click", () => addDispatchItem());
 addDispatchItem();
 
@@ -136,14 +214,16 @@ $("#dispatchForm").addEventListener("submit", async event => {
   if (!signature) return showToast("Releasing person-in-charge signature is required.", true);
   let items;
   try { items = collectDispatchItems(); } catch (error) { return showToast(error.message, true); }
-  const data = Object.fromEntries(new FormData(form));
+  const data = dispatchHeaderData(form);
   data.items = items;
   data.signature = signature;
   const button = form.querySelector("[type=submit]");
   button.disabled = true; button.textContent = "Saving…";
   try {
-    const result = await api("/records", { method: "POST", body: JSON.stringify(data) });
-    form.reset(); $("#dispatchItems").innerHTML = ""; addDispatchItem(); $("#releaseSignature").clearSignature();
+    const result = state.editingDraftId
+      ? await api(`/drafts/${encodeURIComponent(state.editingDraftId)}/dispatch`, { method: "POST", body: JSON.stringify(data) })
+      : await api("/records", { method: "POST", body: JSON.stringify(data) });
+    resetDispatchForm(); await loadDrafts();
     showToast(`Delivery ${result.record.id} dispatched.`);
   } catch (error) { showToast(error.message, true); }
   finally { button.disabled = false; button.textContent = "Confirm Dispatch"; }
@@ -275,3 +355,4 @@ $("#exportCsv").addEventListener("click", () => {
 function formatDate(value) { return value ? new Intl.DateTimeFormat("en-MY", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—"; }
 function escapeHtml(value = "") { return String(value).replace(/[&<>"']/g, character => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" })[character]); }
 if (!config.apiUrl || !config.pin) setTimeout(() => $("#settingsDialog").showModal(), 350);
+else loadDrafts();
