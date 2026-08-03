@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173f35">
+  <title>Factory Movement Register</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">S.E.A. Metal Can Industry (M) Sdn Bhd</p>
+      <h1>Movement Register</h1>
+      <p class="subtitle">Record goods leaving and returning to the factory.</p>
+    </div>
+    <button id="settingsButton" class="secondary" type="button">Settings</button>
+  </header>
+
+  <main>
+    <nav class="tabs" aria-label="Register sections">
+      <button class="tab active" data-view="timeout" type="button">Time Out</button>
+      <button class="tab" data-view="timein" type="button">Time In</button>
+      <button class="tab" data-view="records" type="button">Records</button>
+    </nav>
+
+    <section id="timeout" class="panel active">
+      <div class="section-heading">
+        <div>
+          <p class="step">New movement</p>
+          <h2>Record Time Out</h2>
+        </div>
+        <span class="status-badge out">OUT</span>
+      </div>
+
+      <form id="timeoutForm">
+        <div class="form-grid">
+          <label>Batch number<input name="batchNumber" required autocomplete="off"></label>
+          <label>Size<input name="size" required autocomplete="off" placeholder="e.g. 603D × 180 mm"></label>
+          <label class="wide">Description<input name="description" required autocomplete="off"></label>
+          <label>Quantity<input name="quantityOut" type="number" min="0.01" step="0.01" required></label>
+          <label>Unit
+            <select name="unit" required>
+              <option value="pcs">Pieces</option>
+              <option value="pallets">Pallets</option>
+              <option value="kg">Kilograms</option>
+              <option value="sheets">Sheets</option>
+              <option value="sets">Sets</option>
+            </select>
+          </label>
+          <label class="wide">Purpose / use<input name="purpose" required autocomplete="off"></label>
+          <label>Driver name<input name="driverName" required autocomplete="off"></label>
+          <label>Vehicle number<input name="vehicleNumber" autocomplete="off"></label>
+          <label class="wide">Remarks<textarea name="remarks" rows="3"></textarea></label>
+        </div>
+
+        <div class="signature-group">
+          <div>
+            <h3>Driver signature</h3>
+            <p>Sign inside the box using a finger or mouse.</p>
+          </div>
+          <canvas id="outSignature" class="signature" aria-label="Driver signature field"></canvas>
+          <button class="link-button clear-signature" data-canvas="outSignature" type="button">Clear signature</button>
+        </div>
+
+        <button class="primary submit-button" type="submit">Submit Time Out</button>
+      </form>
+    </section>
+
+    <section id="timein" class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="step">Return movement</p>
+          <h2>Record Time In</h2>
+        </div>
+        <span class="status-badge returned">RETURN</span>
+      </div>
+
+      <form id="timeinForm">
+        <label>Movement ID
+          <div class="inline-field">
+            <input id="returnMovementId" name="movementId" required autocomplete="off" placeholder="MOV-20260731-001">
+            <button id="findRecord" class="secondary" type="button">Find</button>
+          </div>
+        </label>
+
+        <div id="returnSummary" class="record-summary empty">Enter a movement ID to load its details.</div>
+
+        <div class="form-grid">
+          <label>Quantity returned<input name="quantityReturned" type="number" min="0" step="0.01" required></label>
+          <label>Received by<input name="receivedBy" required autocomplete="off"></label>
+          <label class="wide">Return remarks<textarea name="returnRemarks" rows="3"></textarea></label>
+        </div>
+
+        <div class="signature-group">
+          <div>
+            <h3>Receiving signature</h3>
+            <p>Sign to confirm the returned quantity.</p>
+          </div>
+          <canvas id="inSignature" class="signature" aria-label="Receiving signature field"></canvas>
+          <button class="link-button clear-signature" data-canvas="inSignature" type="button">Clear signature</button>
+        </div>
+
+        <button class="primary submit-button" type="submit">Submit Time In</button>
+      </form>
+    </section>
+
+    <section id="records" class="panel">
+      <div class="section-heading records-heading">
+        <div>
+          <p class="step">Movement history</p>
+          <h2>All Records</h2>
+        </div>
+        <div class="actions">
+          <button id="refreshRecords" class="secondary" type="button">Refresh</button>
+          <button id="exportCsv" class="primary compact" type="button">Export CSV</button>
+        </div>
+      </div>
+      <div class="filter-row">
+        <input id="recordSearch" type="search" placeholder="Search ID, batch, driver or description">
+        <select id="statusFilter">
+          <option value="">All statuses</option>
+          <option value="OUT">Out</option>
+          <option value="RETURNED">Returned</option>
+          <option value="PARTIAL">Partially returned</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Batch</th><th>Description</th><th>Qty Out</th><th>Qty In</th><th>Driver</th><th>Time Out</th><th>Time In</th><th>Status</th></tr></thead>
+          <tbody id="recordsBody"><tr><td colspan="9" class="empty-cell">Select Refresh to load records.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="settingsDialog">
+    <form method="dialog">
+      <div class="dialog-heading">
+        <h2>Connection Settings</h2>
+        <button class="icon-button" value="cancel" aria-label="Close settings">×</button>
+      </div>
+      <p>Enter the protected API address created during setup. The PIN is kept only on this device.</p>
+      <label>API address<input id="apiUrl" type="url" placeholder="https://your-worker.workers.dev"></label>
+      <label>Application PIN<input id="appPin" type="password" inputmode="numeric"></label>
+      <button id="saveSettings" class="primary" value="default">Save Settings</button>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
