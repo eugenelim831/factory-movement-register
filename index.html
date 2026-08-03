@@ -4,148 +4,156 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#173f35">
-  <title>Factory Movement Register</title>
+  <title>Factory Transfer Register</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header>
     <div>
       <p class="eyebrow">S.E.A. Metal Can Industry (M) Sdn Bhd</p>
-      <h1>Movement Register</h1>
-      <p class="subtitle">Record goods leaving and returning to the factory.</p>
+      <h1>Transfer Register</h1>
+      <p class="subtitle">Record and verify internal deliveries between Store/Slitter and Power Press.</p>
     </div>
     <button id="settingsButton" class="secondary" type="button">Settings</button>
   </header>
 
   <main>
     <nav class="tabs" aria-label="Register sections">
-      <button class="tab active" data-view="timeout" type="button">Time Out</button>
-      <button class="tab" data-view="timein" type="button">Time In</button>
+      <button class="tab active" data-view="dispatch" type="button">Dispatch</button>
+      <button class="tab" data-view="receive" type="button">Receive</button>
       <button class="tab" data-view="records" type="button">Records</button>
     </nav>
 
-    <section id="timeout" class="panel active">
+    <section id="dispatch" class="panel active">
       <div class="section-heading">
-        <div>
-          <p class="step">New movement</p>
-          <h2>Record Time Out</h2>
-        </div>
-        <span class="status-badge out">OUT</span>
+        <div><p class="step">New delivery</p><h2>Dispatch Transfer</h2></div>
+        <span class="status-badge out">IN TRANSIT</span>
       </div>
 
-      <form id="timeoutForm">
+      <form id="dispatchForm">
         <div class="form-grid">
-          <label>Batch number<input name="batchNumber" required autocomplete="off"></label>
-          <label>Size<input name="size" required autocomplete="off" placeholder="e.g. 603D × 180 mm"></label>
-          <label class="wide">Description<input name="description" required autocomplete="off"></label>
-          <label>Quantity<input name="quantityOut" type="number" min="0.01" step="0.01" required></label>
-          <label>Unit
-            <select name="unit" required>
-              <option value="pcs">Pieces</option>
-              <option value="pallets">Pallets</option>
-              <option value="kg">Kilograms</option>
-              <option value="sheets">Sheets</option>
-              <option value="sets">Sets</option>
+          <label>Transfer direction
+            <select name="direction" required>
+              <option value="" selected disabled>Select direction</option>
+              <option value="Store/Slitter → Power Press">Store/Slitter → Power Press</option>
+              <option value="Power Press → Store/Slitter">Power Press → Store/Slitter</option>
             </select>
           </label>
-          <label class="wide">Purpose / use<input name="purpose" required autocomplete="off"></label>
-          <label>Driver name<input name="driverName" required autocomplete="off"></label>
-          <label>Vehicle number<input name="vehicleNumber" autocomplete="off"></label>
-          <label class="wide">Remarks<textarea name="remarks" rows="3"></textarea></label>
+          <label>Driver
+            <select name="driverName" required>
+              <option value="" selected disabled>Select driver</option>
+              <option value="Maidin">Maidin</option>
+              <option value="Deva">Deva</option>
+              <option value="Gopi">Gopi</option>
+            </select>
+          </label>
+          <label>Vehicle number
+            <select name="vehicleNumber" required>
+              <option value="" selected disabled>Select vehicle</option>
+              <option value="WC3268">WC3268</option>
+              <option value="WTL8236">WTL8236</option>
+              <option value="BMY3862">BMY3862</option>
+            </select>
+          </label>
+          <label>Released by (person-in-charge)<input name="releasedBy" required autocomplete="off" placeholder="Full name"></label>
+          <label class="wide">Purpose / production use<input name="purpose" required autocomplete="off"></label>
         </div>
+
+        <div class="items-heading">
+          <div><p class="step">Delivery contents</p><h3>Add every batch, size and component on this ride</h3></div>
+          <button id="addItem" class="secondary" type="button">+ Add Item</button>
+        </div>
+        <div id="dispatchItems" class="item-list"></div>
+
+        <label class="wide remarks-label">Dispatch remarks<textarea name="remarks" rows="3"></textarea></label>
 
         <div class="signature-group">
-          <div>
-            <h3>Driver signature</h3>
-            <p>Sign inside the box using a finger or mouse.</p>
-          </div>
-          <canvas id="outSignature" class="signature" aria-label="Driver signature field"></canvas>
-          <button class="link-button clear-signature" data-canvas="outSignature" type="button">Clear signature</button>
+          <div><h3>Releasing person-in-charge signature</h3><p>Confirm all listed items and quantities before dispatch.</p></div>
+          <canvas id="releaseSignature" class="signature" aria-label="Releasing person-in-charge signature"></canvas>
+          <button class="link-button clear-signature" data-canvas="releaseSignature" type="button">Clear signature</button>
         </div>
-
-        <button class="primary submit-button" type="submit">Submit Time Out</button>
+        <button class="primary submit-button" type="submit">Confirm Dispatch</button>
       </form>
     </section>
 
-    <section id="timein" class="panel">
+    <section id="receive" class="panel">
       <div class="section-heading">
-        <div>
-          <p class="step">Return movement</p>
-          <h2>Record Time In</h2>
-        </div>
-        <span class="status-badge returned">RETURN</span>
+        <div><p class="step">Cross-check delivery</p><h2>Receive Transfer</h2></div>
+        <span class="status-badge returned">VERIFY ITEMS</span>
       </div>
 
-      <form id="timeinForm">
-        <label>Movement ID
+      <form id="receiveForm">
+        <label>Open Delivery ID
           <div class="inline-field">
-            <input id="returnMovementId" name="movementId" required autocomplete="off" placeholder="MOV-20260731-001">
-            <button id="findRecord" class="secondary" type="button">Find</button>
+            <select id="deliveryId" name="deliveryId" required><option value="">Loading open deliveries…</option></select>
+            <button id="refreshDeliveries" class="secondary" type="button">Refresh</button>
           </div>
         </label>
+        <div id="deliverySummary" class="record-summary empty">Select an open Delivery ID to view all items.</div>
+        <div id="receiveItems" class="receive-list"></div>
 
-        <div id="returnSummary" class="record-summary empty">Enter a movement ID to load its details.</div>
-
-        <div class="form-grid">
-          <label>Quantity returned<input name="quantityReturned" type="number" min="0" step="0.01" required></label>
-          <label>Received by<input name="receivedBy" required autocomplete="off"></label>
-          <label class="wide">Return remarks<textarea name="returnRemarks" rows="3"></textarea></label>
+        <div class="form-grid receive-details">
+          <label>Received by (person-in-charge)<input name="receivedBy" required autocomplete="off" placeholder="Full name"></label>
+          <label>Overall condition
+            <select name="receiptCondition" required>
+              <option value="Good" selected>Good</option>
+              <option value="Quantity shortage">Quantity shortage</option>
+              <option value="Damaged">Damaged</option>
+              <option value="Wrong item">Wrong item</option>
+              <option value="Other issue">Other issue</option>
+            </select>
+          </label>
+          <label class="wide">Receiving remarks<textarea name="receivingRemarks" rows="3" placeholder="Explain any missing item, mismatch or damage"></textarea></label>
         </div>
 
         <div class="signature-group">
-          <div>
-            <h3>Receiving signature</h3>
-            <p>Sign to confirm the returned quantity.</p>
-          </div>
-          <canvas id="inSignature" class="signature" aria-label="Receiving signature field"></canvas>
-          <button class="link-button clear-signature" data-canvas="inSignature" type="button">Clear signature</button>
+          <div><h3>Receiving person-in-charge signature</h3><p>Sign only after checking every item against the delivery.</p></div>
+          <canvas id="receiveSignature" class="signature" aria-label="Receiving person-in-charge signature"></canvas>
+          <button class="link-button clear-signature" data-canvas="receiveSignature" type="button">Clear signature</button>
         </div>
-
-        <button class="primary submit-button" type="submit">Submit Time In</button>
+        <button class="primary submit-button" type="submit">Confirm Item Check</button>
       </form>
     </section>
 
     <section id="records" class="panel">
       <div class="section-heading records-heading">
-        <div>
-          <p class="step">Movement history</p>
-          <h2>All Records</h2>
-        </div>
-        <div class="actions">
-          <button id="refreshRecords" class="secondary" type="button">Refresh</button>
-          <button id="exportCsv" class="primary compact" type="button">Export CSV</button>
-        </div>
+        <div><p class="step">Delivery history</p><h2>All Delivery Records</h2></div>
+        <div class="actions"><button id="refreshRecords" class="secondary" type="button">Refresh</button><button id="exportCsv" class="primary compact" type="button">Export CSV</button></div>
       </div>
       <div class="filter-row">
-        <input id="recordSearch" type="search" placeholder="Search ID, batch, driver or description">
-        <select id="statusFilter">
-          <option value="">All statuses</option>
-          <option value="OUT">Out</option>
-          <option value="RETURNED">Returned</option>
-          <option value="PARTIAL">Partially returned</option>
-        </select>
+        <input id="recordSearch" type="search" placeholder="Search Delivery ID, batch, item, driver or vehicle">
+        <select id="statusFilter"><option value="">All statuses</option><option value="IN_TRANSIT">In Transit</option><option value="INCOMPLETE">Incomplete</option><option value="RECEIVED">Received</option></select>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>ID</th><th>Batch</th><th>Description</th><th>Qty Out</th><th>Qty In</th><th>Driver</th><th>Time Out</th><th>Time In</th><th>Status</th></tr></thead>
-          <tbody id="recordsBody"><tr><td colspan="9" class="empty-cell">Select Refresh to load records.</td></tr></tbody>
-        </table>
-      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Delivery ID</th><th>Direction</th><th>Items</th><th>Driver</th><th>Vehicle</th><th>Dispatched</th><th>Received</th><th>Status</th></tr></thead>
+        <tbody id="recordsBody"><tr><td colspan="8" class="empty-cell">Select Refresh to load records.</td></tr></tbody>
+      </table></div>
     </section>
   </main>
 
-  <dialog id="settingsDialog">
-    <form method="dialog">
-      <div class="dialog-heading">
-        <h2>Connection Settings</h2>
-        <button class="icon-button" value="cancel" aria-label="Close settings">×</button>
+  <template id="dispatchItemTemplate">
+    <article class="item-card">
+      <div class="item-card-head"><strong class="item-number">Item</strong><button class="remove-item link-button" type="button">Remove</button></div>
+      <div class="form-grid item-fields">
+        <label>Item type<select class="item-type" required><option value="BATCH">Tinplate batch</option><option value="COMPONENT">Component</option></select></label>
+        <label class="batch-field">Batch number<input class="batch-number" placeholder="e.g. 1234/56" inputmode="numeric"></label>
+        <label class="batch-field">Size<input class="item-size" placeholder="e.g. 0.23*950*740"></label>
+        <label>Item description<input class="item-description" required placeholder="e.g. Printed tinplate or 603D lids"></label>
+        <label>Quantity<input class="item-quantity" type="number" min="0.01" step="0.01" required></label>
+        <label>Unit<select class="item-unit" required><option value="pieces">Pieces</option><option value="bags">Bags</option><option value="sets">Sets</option><option value="pallets">Pallets</option><option value="sheets">Sheets</option></select></label>
+        <label class="per-unit-field hidden">Pieces per bag<input class="pieces-per-unit" type="number" min="1" step="1" placeholder="e.g. 7000"></label>
       </div>
-      <p>Enter the protected API address created during setup. The PIN is kept only on this device.</p>
-      <label>API address<input id="apiUrl" type="url" placeholder="https://your-worker.workers.dev"></label>
-      <label>Application PIN<input id="appPin" type="password" inputmode="numeric"></label>
-      <button id="saveSettings" class="primary" value="default">Save Settings</button>
-    </form>
-  </dialog>
+      <p class="format-hint batch-field">Batch format: numbers/numbers. Size format: 0.decimal*width*length.</p>
+    </article>
+  </template>
+
+  <dialog id="settingsDialog"><form method="dialog">
+    <div class="dialog-heading"><h2>Connection Settings</h2><button class="icon-button" value="cancel" aria-label="Close settings">×</button></div>
+    <p>Enter the protected API address and application PIN.</p>
+    <label>API address<input id="apiUrl" type="url" placeholder="https://your-worker.workers.dev"></label>
+    <label>Application PIN<input id="appPin" type="password" inputmode="numeric"></label>
+    <button id="saveSettings" class="primary" value="default">Save Settings</button>
+  </form></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="app.js"></script>
