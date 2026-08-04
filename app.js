@@ -1,8 +1,9 @@
 const state = { records: [], openDeliveries: [], selectedDelivery: null, drafts: [], editingDraftId: null, autoSaveTimer: null, autoSaveBusy: false, correctionRecord: null };
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
+const DEFAULT_API_URL = "https://factory-movement-api.eugenelim831-1b3.workers.dev";
 const config = {
-  get apiUrl() { return localStorage.getItem("movementApiUrl") || ""; },
+  get apiUrl() { return localStorage.getItem("movementApiUrlOverride") || DEFAULT_API_URL; },
   get token() { return sessionStorage.getItem("movementSessionToken") || ""; },
   get user() { return sessionStorage.getItem("movementSessionUser") || ""; }
 };
@@ -73,11 +74,10 @@ $$(".signature").forEach(setupSignature);
 $$(".clear-signature").forEach(button => button.addEventListener("click", () => document.getElementById(button.dataset.canvas).clearSignature()));
 
 $("#settingsButton").addEventListener("click", () => { $("#apiUrl").value = config.apiUrl; $("#settingsDialog").showModal(); });
-$("#saveSettings").addEventListener("click", event => { event.preventDefault(); localStorage.setItem("movementApiUrl", $("#apiUrl").value.trim()); $("#settingsDialog").close(); showToast("Settings saved."); showLogin(); });
+$("#saveSettings").addEventListener("click", event => { event.preventDefault(); const value = $("#apiUrl").value.trim().replace(/\/$/, ""); if (value === DEFAULT_API_URL) localStorage.removeItem("movementApiUrlOverride"); else localStorage.setItem("movementApiUrlOverride", value); $("#settingsDialog").close(); showToast("Settings saved."); showLogin(); });
 
 function updateCurrentUser() { $("#currentUser").textContent = config.user ? `Signed in: ${config.user}` : "Not signed in"; }
 function showLogin() {
-  $("#loginApiUrl").value = config.apiUrl;
   if ($("#settingsDialog").open) $("#settingsDialog").close();
   if (!$("#loginDialog").open) $("#loginDialog").showModal();
 }
@@ -85,9 +85,7 @@ $("#loginForm").addEventListener("submit", async event => {
   event.preventDefault();
   const button = $("#loginButton"); button.disabled = true; button.textContent = "Logging in…";
   try {
-    const apiUrl = $("#loginApiUrl").value.trim().replace(/\/$/, "");
-    if (!/^https:\/\/[^\s]+$/i.test(apiUrl)) throw new Error("Enter the complete API address beginning with https://");
-    localStorage.setItem("movementApiUrl", apiUrl);
+    const apiUrl = config.apiUrl.replace(/\/$/, "");
     let response;
     try { response = await fetch(`${apiUrl}/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: $("#loginName").value, pin: $("#loginPin").value }) }); }
     catch { throw new Error("Could not connect to the API. Check the Cloudflare Worker address and internet connection."); }
