@@ -159,9 +159,9 @@
         <label class="batch-field">Batch number<input class="batch-number" placeholder="e.g. 1234/56" inputmode="text" autocapitalize="off"></label>
         <label class="batch-field">Size<input class="item-size" placeholder="e.g. 0.23*950*740"></label>
         <label>Item description<input class="item-description" required placeholder="e.g. Printed tinplate or 603D lids"></label>
-        <label>Quantity<input class="item-quantity" type="number" min="0.01" step="0.01" required></label>
+        <label>Quantity<input class="item-quantity" type="number" inputmode="decimal" min="0.01" step="0.01" required></label>
         <label>Unit<select class="item-unit" required><option value="pieces">Pieces</option><option value="blanks">Blanks</option><option value="bags">Bags</option><option value="sets">Sets</option><option value="pallets">Pallets</option><option value="sheets">Sheets</option></select></label>
-        <label class="per-unit-field hidden">Pieces per bag<input class="pieces-per-unit" type="number" min="1" step="1" placeholder="e.g. 7000"></label>
+        <label class="per-unit-field hidden">Pieces per bag<input class="pieces-per-unit" type="number" inputmode="numeric" min="1" step="1" placeholder="e.g. 7000"></label>
       </div>
       <p class="format-hint batch-field">Batch format: numbers/numbers. Size format: 0.decimal*width*length.</p>
     </article>
@@ -201,7 +201,7 @@
   </form></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="qrcode.js"></script>
-  <script src="app.js"></script>
+  <script src="qrcode.js?v=14"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>

@@ -351,8 +351,8 @@ function renderReceiveItems(record) {
         <div><span>Expected</span><strong>${item.quantity} ${escapeHtml(item.unit)}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} pieces` : ""}</strong></div><div><span>Previously received</span><strong>${priorQuantity}</strong></div><div><span>Outstanding</span><strong>${outstanding}</strong></div>
       </div>
       <div class="form-grid check-fields">
-        <label>Quantity received this time<input class="actual-quantity" type="number" min="0" step="0.01" value="${complete ? 0 : outstanding}" ${complete ? "readonly" : "required"}></label>
-        ${item.piecesPerUnit ? `<label>Actual pieces per bag<input class="actual-per-unit" type="number" min="0" step="1" value="${item.piecesPerUnit}" ${complete ? "readonly" : "required"}></label>` : ""}
+        <label>Quantity received this time<input class="actual-quantity" type="number" inputmode="decimal" min="0" step="0.01" value="${complete ? 0 : outstanding}" ${complete ? "readonly" : "required"}></label>
+        ${item.piecesPerUnit ? `<label>Actual pieces per bag<input class="actual-per-unit" type="number" inputmode="numeric" min="0" step="1" value="${item.piecesPerUnit}" ${complete ? "readonly" : "required"}></label>` : ""}
         <label>Discrepancy reason<select class="discrepancy-reason" ${complete ? "disabled" : ""}><option value="">Select when item is incomplete</option><option>Item missing</option><option>Quantity short</option><option>Quantity excess</option><option>Wrong item</option><option>Wrong batch/size</option><option>Damaged</option><option>Packaging broken</option><option>Other</option></select></label>
       </div>
       <div class="match-result" aria-live="polite"></div>
@@ -479,7 +479,7 @@ function updateCorrectionValueControl() {
     correctionOptions[field].forEach(value => { const option = document.createElement("option"); option.value = value; option.textContent = value.charAt(0).toUpperCase() + value.slice(1); control.appendChild(option); });
     control.value = String(current);
   } else if (["quantity", "piecesPerUnit"].includes(field)) {
-    control = document.createElement("input"); control.type = "number"; control.min = field === "piecesPerUnit" ? "1" : "0.01"; control.step = field === "piecesPerUnit" ? "1" : "0.01"; control.value = current;
+    control = document.createElement("input"); control.type = "number"; control.inputMode = field === "piecesPerUnit" ? "numeric" : "decimal"; control.min = field === "piecesPerUnit" ? "1" : "0.01"; control.step = field === "piecesPerUnit" ? "1" : "0.01"; control.value = current;
   } else if (field === "batchNumber") {
     control = document.createElement("input"); control.type = "text"; control.inputMode = "text"; control.pattern = "[0-9]+/[0-9]+"; control.placeholder = "e.g. 1234/56"; control.value = current;
   } else if (field === "size") {
