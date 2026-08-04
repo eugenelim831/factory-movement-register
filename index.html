@@ -176,7 +176,9 @@
 
   <dialog id="loginDialog"><form id="loginForm">
     <div class="dialog-heading"><h2>PIC Login</h2></div>
-    <p>Select your own name and enter your individual PIN.</p>
+    <p>Enter the API address once on this device, then select your own name and PIN.</p>
+    <label>API address<input id="loginApiUrl" type="url" inputmode="url" autocapitalize="off" autocomplete="url" placeholder="https://your-worker.workers.dev" required></label>
+    <p class="format-hint">This is your Cloudflare Worker address. It will be saved automatically on this device.</p>
     <label>Your name<select id="loginName" required><option value="" selected disabled>Select your name</option><option value="Aung King">Aung King</option><option value="Nadia">Nadia</option><option value="Lina">Lina</option><option value="Lalit">Lalit</option><option value="Yati">Yati</option></select></label>
     <label>Your PIN<input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required></label>
     <button id="loginButton" class="primary" type="submit">Log in</button>
@@ -195,7 +197,7 @@
     <label>Delivery ID<input id="correctionDeliveryId" readonly></label>
     <label>Correction target<select id="correctionTarget" required></select></label>
     <label>Field<select id="correctionField" required></select></label>
-    <label>Corrected value<input id="correctionValue" required></label>
+    <label id="correctionValueField"><span>Corrected value</span><span id="correctionValueControl"></span></label>
     <label>Reason for correction<textarea id="correctionReason" rows="3" required></textarea></label>
     <button class="primary" type="submit">Save Correction</button>
   </form></dialog>

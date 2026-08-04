@@ -1,4 +1,4 @@
-const state = { records: [], openDeliveries: [], selectedDelivery: null, drafts: [], editingDraftId: null, autoSaveTimer: null, autoSaveBusy: false };
+const state = { records: [], openDeliveries: [], selectedDelivery: null, drafts: [], editingDraftId: null, autoSaveTimer: null, autoSaveBusy: false, correctionRecord: null };
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const config = {
@@ -76,12 +76,21 @@ $("#settingsButton").addEventListener("click", () => { $("#apiUrl").value = conf
 $("#saveSettings").addEventListener("click", event => { event.preventDefault(); localStorage.setItem("movementApiUrl", $("#apiUrl").value.trim()); $("#settingsDialog").close(); showToast("Settings saved."); showLogin(); });
 
 function updateCurrentUser() { $("#currentUser").textContent = config.user ? `Signed in: ${config.user}` : "Not signed in"; }
-function showLogin() { if (!config.apiUrl) return $("#settingsDialog").showModal(); if (!$("#loginDialog").open) $("#loginDialog").showModal(); }
+function showLogin() {
+  $("#loginApiUrl").value = config.apiUrl;
+  if ($("#settingsDialog").open) $("#settingsDialog").close();
+  if (!$("#loginDialog").open) $("#loginDialog").showModal();
+}
 $("#loginForm").addEventListener("submit", async event => {
   event.preventDefault();
   const button = $("#loginButton"); button.disabled = true; button.textContent = "Logging in…";
   try {
-    const response = await fetch(`${config.apiUrl.replace(/\/$/, "")}/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: $("#loginName").value, pin: $("#loginPin").value }) });
+    const apiUrl = $("#loginApiUrl").value.trim().replace(/\/$/, "");
+    if (!/^https:\/\/[^\s]+$/i.test(apiUrl)) throw new Error("Enter the complete API address beginning with https://");
+    localStorage.setItem("movementApiUrl", apiUrl);
+    let response;
+    try { response = await fetch(`${apiUrl}/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: $("#loginName").value, pin: $("#loginPin").value }) }); }
+    catch { throw new Error("Could not connect to the API. Check the Cloudflare Worker address and internet connection."); }
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || "Login failed.");
     sessionStorage.setItem("movementSessionToken", body.token); sessionStorage.setItem("movementSessionUser", body.user);
@@ -424,12 +433,49 @@ $("#recordsBody").addEventListener("click", event => { const button = event.targ
 const deliveryCorrectionFields = ["direction","driverName","vehicleNumber","releasedBy","purpose","remarks"];
 const itemCorrectionFields = ["batchNumber","size","description","quantity","unit","piecesPerUnit"];
 function openCorrection(record) {
+  state.correctionRecord = record;
   $("#correctionDeliveryId").value = record.id;
   $("#correctionTarget").innerHTML = `<option value="DELIVERY">Delivery details</option>` + normalizedItems(record).map((item, index) => `<option value="${escapeHtml(item.itemId)}">Item ${index + 1}: ${escapeHtml(item.description)}</option>`).join("");
-  updateCorrectionFields(); $("#correctionValue").value = ""; $("#correctionReason").value = ""; $("#correctionDialog").showModal();
+  updateCorrectionFields(); $("#correctionReason").value = ""; $("#correctionDialog").showModal();
 }
-function updateCorrectionFields() { const fields = $("#correctionTarget").value === "DELIVERY" ? deliveryCorrectionFields : itemCorrectionFields; $("#correctionField").innerHTML = fields.map(field => `<option value="${field}">${field.replace(/([A-Z])/g, " $1")}</option>`).join(""); }
+function updateCorrectionFields() {
+  const fields = $("#correctionTarget").value === "DELIVERY" ? deliveryCorrectionFields : itemCorrectionFields;
+  $("#correctionField").innerHTML = fields.map(field => `<option value="${field}">${field.replace(/([A-Z])/g, " $1")}</option>`).join("");
+  updateCorrectionValueControl();
+}
+const correctionOptions = {
+  direction: ["Store/Slitter → Power Press", "Power Press → Store/Slitter"],
+  driverName: ["Maidin", "Deva", "Gopi"],
+  vehicleNumber: ["WC 3268N", "WTL8236", "BMY3682"],
+  releasedBy: ["Aung King", "Nadia", "Lina", "Lalit", "Yati"],
+  unit: ["pieces", "blanks", "bags", "sets", "pallets", "sheets"]
+};
+function correctionCurrentValue() {
+  const target = $("#correctionTarget").value;
+  const source = target === "DELIVERY" ? state.correctionRecord : normalizedItems(state.correctionRecord).find(item => item.itemId === target);
+  return source?.[$("#correctionField").value] ?? "";
+}
+function updateCorrectionValueControl() {
+  const field = $("#correctionField").value;
+  const current = correctionCurrentValue();
+  let control;
+  if (correctionOptions[field]) {
+    control = document.createElement("select");
+    correctionOptions[field].forEach(value => { const option = document.createElement("option"); option.value = value; option.textContent = value.charAt(0).toUpperCase() + value.slice(1); control.appendChild(option); });
+    control.value = String(current);
+  } else if (["quantity", "piecesPerUnit"].includes(field)) {
+    control = document.createElement("input"); control.type = "number"; control.min = field === "piecesPerUnit" ? "1" : "0.01"; control.step = field === "piecesPerUnit" ? "1" : "0.01"; control.value = current;
+  } else if (field === "batchNumber") {
+    control = document.createElement("input"); control.type = "text"; control.inputMode = "text"; control.pattern = "[0-9]+/[0-9]+"; control.placeholder = "e.g. 1234/56"; control.value = current;
+  } else if (field === "size") {
+    control = document.createElement("input"); control.type = "text"; control.inputMode = "decimal"; control.pattern = "0\\.[0-9]+[*x×][0-9]+[*x×][0-9]+"; control.placeholder = "e.g. 0.23*950*740"; control.value = current;
+  } else {
+    control = document.createElement("input"); control.type = "text"; control.maxLength = 500; control.value = current;
+  }
+  control.id = "correctionValue"; control.required = true; $("#correctionValueControl").replaceChildren(control);
+}
 $("#correctionTarget").addEventListener("change", updateCorrectionFields);
+$("#correctionField").addEventListener("change", updateCorrectionValueControl);
 $("#closeCorrection").addEventListener("click", () => $("#correctionDialog").close());
 $("#correctionForm").addEventListener("submit", async event => {
   event.preventDefault(); const button = event.currentTarget.querySelector("[type=submit]"); button.disabled = true;
@@ -461,6 +507,5 @@ $("#exportCsv").addEventListener("click", () => {
 function formatDate(value) { return value ? new Intl.DateTimeFormat("en-MY", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—"; }
 function escapeHtml(value = "") { return String(value).replace(/[&<>"']/g, character => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" })[character]); }
 updateCurrentUser();
-if (!config.apiUrl) setTimeout(() => $("#settingsDialog").showModal(), 350);
-else if (!config.token) setTimeout(showLogin, 350);
+if (!config.apiUrl || !config.token) setTimeout(showLogin, 350);
 else new URLSearchParams(location.search).get("delivery") ? switchView("receive") : loadDrafts();
