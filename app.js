@@ -446,6 +446,7 @@ $("#recordsBody").addEventListener("click", async event => {
 
 const deliveryCorrectionFields = ["direction","driverName","vehicleNumber","releasedBy","purpose","remarks"];
 const itemCorrectionFields = ["batchNumber","size","description","quantity","unit","piecesPerUnit"];
+const correctionFieldLabels = { direction: "Direction", driverName: "Driver Name", vehicleNumber: "Vehicle Number", releasedBy: "Released By", purpose: "Purpose", remarks: "Remarks", batchNumber: "Batch Number", size: "Size", description: "Description", quantity: "Quantity", unit: "Unit", piecesPerUnit: "Pieces Per Bag" };
 function openCorrection(record) {
   state.correctionRecord = record;
   $("#correctionDeliveryId").value = record.id;
@@ -454,7 +455,7 @@ function openCorrection(record) {
 }
 function updateCorrectionFields() {
   const fields = $("#correctionTarget").value === "DELIVERY" ? deliveryCorrectionFields : itemCorrectionFields;
-  $("#correctionField").innerHTML = fields.map(field => `<option value="${field}">${field.replace(/([A-Z])/g, " $1")}</option>`).join("");
+  $("#correctionField").innerHTML = fields.map(field => `<option value="${field}">${correctionFieldLabels[field]}</option>`).join("");
   updateCorrectionValueControl();
 }
 const correctionOptions = {
