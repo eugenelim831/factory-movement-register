@@ -76,7 +76,12 @@ $$(".clear-signature").forEach(button => button.addEventListener("click", () => 
 $("#settingsButton").addEventListener("click", () => { $("#apiUrl").value = config.apiUrl; $("#settingsDialog").showModal(); });
 $("#saveSettings").addEventListener("click", event => { event.preventDefault(); const value = $("#apiUrl").value.trim().replace(/\/$/, ""); if (value === DEFAULT_API_URL) localStorage.removeItem("movementApiUrlOverride"); else localStorage.setItem("movementApiUrlOverride", value); $("#settingsDialog").close(); showToast("Settings saved."); showLogin(); });
 
-function updateCurrentUser() { $("#currentUser").textContent = config.user ? `Signed in: ${config.user}` : "Not signed in"; }
+function updateCurrentUser() {
+  const signedIn = Boolean(config.token && config.user);
+  $("#currentUser").textContent = signedIn ? `Signed in: ${config.user}` : "Not signed in";
+  $("#headerLoginButton").classList.toggle("hidden", signedIn);
+  $("#logoutButton").classList.toggle("hidden", !signedIn);
+}
 function showLogin() {
   if ($("#settingsDialog").open) $("#settingsDialog").close();
   if (!$("#loginDialog").open) $("#loginDialog").showModal();
@@ -96,6 +101,7 @@ $("#loginForm").addEventListener("submit", async event => {
   } catch (error) { showToast(error.message, true); }
   finally { button.disabled = false; button.textContent = "Log in"; }
 });
+$("#headerLoginButton").addEventListener("click", showLogin);
 $("#logoutButton").addEventListener("click", () => { sessionStorage.removeItem("movementSessionToken"); sessionStorage.removeItem("movementSessionUser"); updateCurrentUser(); showLogin(); });
 
 function addDispatchItem(initial = {}) {
