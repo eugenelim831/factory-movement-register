@@ -142,7 +142,7 @@
       </div>
       <div class="filter-row">
         <input id="recordSearch" type="search" placeholder="Search Delivery ID, batch, item, driver or vehicle">
-        <select id="statusFilter"><option value="">All statuses</option><option value="DRAFT">Draft</option><option value="IN_TRANSIT">In Transit</option><option value="INCOMPLETE">Incomplete</option><option value="RECEIVED">Received</option></select>
+        <select id="statusFilter"><option value="">All statuses</option><option value="DRAFT">Draft</option><option value="IN_TRANSIT">In Transit</option><option value="INCOMPLETE">Incomplete</option><option value="RECEIVED">Received</option><option value="CANCELLED">Cancelled</option></select>
       </div>
       <div class="table-wrap"><table>
         <thead><tr><th>Delivery ID</th><th>Direction</th><th>Items</th><th>Driver</th><th>Vehicle</th><th>Dispatch User</th><th>Receiving User</th><th>Dispatched</th><th>Received</th><th>Status</th><th>Action</th></tr></thead>
@@ -177,7 +177,7 @@
   <dialog id="loginDialog"><form id="loginForm">
     <div class="dialog-heading"><h2>PIC Login</h2></div>
     <p>Select your own name and enter your individual PIN.</p>
-    <label>Your name<select id="loginName" required><option value="" selected disabled>Select your name</option><option value="Aung King">Aung King</option><option value="Nadia">Nadia</option><option value="Lina">Lina</option><option value="Lalit">Lalit</option><option value="Yati">Yati</option></select></label>
+    <label>Your name<select id="loginName" required><option value="" selected disabled>Select your name</option><option value="Aung King">Aung King</option><option value="Nadia">Nadia</option><option value="Lina">Lina</option><option value="Lalit">Lalit</option><option value="Yati">Yati</option><option value="Eugene">Eugene</option></select></label>
     <label>Your PIN<input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required></label>
     <button id="loginButton" class="primary" type="submit">Log in</button>
   </form></dialog>

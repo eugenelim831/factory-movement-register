@@ -430,9 +430,19 @@ function recordSearchText(record) { return [record.id, record.direction, record.
 function filteredRecords() { const term = $("#recordSearch").value.trim().toLowerCase(); const status = $("#statusFilter").value; return state.records.filter(record => (!term || recordSearchText(record).includes(term)) && (!status || normalizedStatus(record.status) === status)); }
 function renderRecords() {
   const records = filteredRecords();
-  $("#recordsBody").innerHTML = records.length ? records.map(record => `<tr><td>${escapeHtml(record.id)}</td><td>${escapeHtml(record.direction || "—")}</td><td>${normalizedItems(record).length}</td><td>${escapeHtml(record.driverName)}</td><td>${escapeHtml(record.vehicleNumber || "—")}</td><td>${escapeHtml(record.dispatchedBy || record.createdBy || "—")}</td><td>${escapeHtml(record.lastUpdatedBy || "—")}</td><td>${formatDate(record.timeOut)}</td><td>${record.timeReceived || record.timeIn ? formatDate(record.timeReceived || record.timeIn) : "—"}</td><td class="status-cell ${normalizedStatus(record.status)}">${normalizedStatus(record.status).replaceAll("_", " ")}</td><td><button class="secondary correct-record" data-id="${escapeHtml(record.id)}" type="button">Correct</button></td></tr>`).join("") : `<tr><td colspan="11" class="empty-cell">No matching records.</td></tr>`;
+  $("#recordsBody").innerHTML = records.length ? records.map(record => `<tr><td>${escapeHtml(record.id)}</td><td>${escapeHtml(record.direction || "—")}</td><td>${normalizedItems(record).length}</td><td>${escapeHtml(record.driverName)}</td><td>${escapeHtml(record.vehicleNumber || "—")}</td><td>${escapeHtml(record.dispatchedBy || record.createdBy || "—")}</td><td>${escapeHtml(record.lastUpdatedBy || "—")}</td><td>${formatDate(record.timeOut)}</td><td>${record.timeReceived || record.timeIn ? formatDate(record.timeReceived || record.timeIn) : "—"}</td><td class="status-cell ${normalizedStatus(record.status)}">${normalizedStatus(record.status).replaceAll("_", " ")}</td><td><button class="secondary correct-record" data-id="${escapeHtml(record.id)}" type="button">Correct</button>${config.user === "Eugene" && normalizedStatus(record.status) === "IN_TRANSIT" ? ` <button class="secondary danger-button cancel-record" data-id="${escapeHtml(record.id)}" type="button">Cancel</button>` : ""}${normalizedStatus(record.status) === "CANCELLED" ? `<div class="audit-note">${escapeHtml(record.cancelledBy || "Eugene")} · ${formatDate(record.cancelledAt)}<br>${escapeHtml(record.cancellationReason || "No reason recorded")}</div>` : ""}</td></tr>`).join("") : `<tr><td colspan="11" class="empty-cell">No matching records.</td></tr>`;
 }
-$("#recordsBody").addEventListener("click", event => { const button = event.target.closest(".correct-record"); if (button) openCorrection(state.records.find(record => record.id === button.dataset.id)); });
+$("#recordsBody").addEventListener("click", async event => {
+  const correctionButton = event.target.closest(".correct-record");
+  if (correctionButton) return openCorrection(state.records.find(record => record.id === correctionButton.dataset.id));
+  const cancelButton = event.target.closest(".cancel-record");
+  if (!cancelButton) return;
+  const reason = prompt(`Enter the compulsory cancellation reason for ${cancelButton.dataset.id}:`)?.trim();
+  if (!reason) return showToast("The order was not cancelled. A cancellation reason is compulsory.", true);
+  if (!confirm(`Cancel ${cancelButton.dataset.id}? It will remain in the audit record and cannot be received.`)) return;
+  cancelButton.disabled = true;
+  try { await api(`/records/${encodeURIComponent(cancelButton.dataset.id)}/cancel`, { method: "POST", body: JSON.stringify({ reason }) }); await loadRecords(); showToast(`Delivery ${cancelButton.dataset.id} cancelled.`); } catch (error) { showToast(error.message, true); } finally { cancelButton.disabled = false; }
+});
 
 const deliveryCorrectionFields = ["direction","driverName","vehicleNumber","releasedBy","purpose","remarks"];
 const itemCorrectionFields = ["batchNumber","size","description","quantity","unit","piecesPerUnit"];
@@ -498,11 +508,11 @@ $("#recordSearch").addEventListener("input", renderRecords);
 $("#statusFilter").addEventListener("change", renderRecords);
 $("#exportCsv").addEventListener("click", () => {
   if (!state.records.length) return showToast("Load the records before exporting.", true);
-  const headings = ["Delivery ID","Direction","Driver","Vehicle","Logged-in Dispatch User","Released By PIC","Dispatched","Logged-in Receiving User","Received By PIC","Received Time","Status","Item Type","Batch Number","Size","Description","Expected Quantity","Unit","Pieces Per Bag","Present","Received Quantity","Matched","Condition","Remarks"];
+  const headings = ["Delivery ID","Direction","Driver","Vehicle","Logged-in Dispatch User","Released By PIC","Dispatched","Logged-in Receiving User","Received By PIC","Received Time","Status","Cancelled By","Cancelled At","Cancellation Reason","Item Type","Batch Number","Size","Description","Expected Quantity","Unit","Pieces Per Bag","Present","Received Quantity","Matched","Condition","Remarks"];
   const rows = [headings];
   filteredRecords().forEach(record => {
     const received = new Map((record.receivedItems || []).map(item => [item.itemId, item]));
-    normalizedItems(record).forEach(item => { const check = received.get(item.itemId) || {}; rows.push([record.id,record.direction,record.driverName,record.vehicleNumber,record.dispatchedBy || record.createdBy,record.releasedBy,record.timeOut,record.lastUpdatedBy,record.receivedBy,record.timeReceived || record.timeIn,normalizedStatus(record.status),item.type,item.batchNumber,item.size,item.description,item.quantity,item.unit,item.piecesPerUnit ?? "",check.present == null ? "" : check.present ? "Yes" : "No",check.quantityReceived ?? "",check.matched == null ? "" : check.matched ? "Yes" : "No",record.receiptCondition,record.receivingRemarks]); });
+    normalizedItems(record).forEach(item => { const check = received.get(item.itemId) || {}; rows.push([record.id,record.direction,record.driverName,record.vehicleNumber,record.dispatchedBy || record.createdBy,record.releasedBy,record.timeOut,record.lastUpdatedBy,record.receivedBy,record.timeReceived || record.timeIn,normalizedStatus(record.status),record.cancelledBy,record.cancelledAt,record.cancellationReason,item.type,item.batchNumber,item.size,item.description,item.quantity,item.unit,item.piecesPerUnit ?? "",check.present == null ? "" : check.present ? "Yes" : "No",check.quantityReceived ?? "",check.matched == null ? "" : check.matched ? "Yes" : "No",record.receiptCondition,record.receivingRemarks]); });
   });
   const csv = rows.map(row => row.map(value => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
   const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); link.download = `transfer-register-${new Date().toISOString().slice(0,10)}.csv`; link.click(); URL.revokeObjectURL(link.href);
