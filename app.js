@@ -33,6 +33,12 @@ function composeSize(card) {
   if (card.querySelector(".item-size")) card.querySelector(".item-size").value = value;
   return value;
 }
+function enforceWholeNumber(input, minimum = 0) {
+  if (input.dataset.wholeNumberBound) return;
+  input.dataset.wholeNumberBound = "true";
+  input.addEventListener("keydown", event => { if ([".", ",", "e", "E", "+", "-"].includes(event.key)) event.preventDefault(); });
+  input.addEventListener("input", () => { if (input.value === "") return; const value = Number(input.value); input.value = Number.isFinite(value) ? String(Math.max(minimum, Math.trunc(value))) : ""; });
+}
 
 function requireSettings() {
   if (config.apiUrl && config.token) return true;
@@ -159,6 +165,7 @@ function updateItemCard(card) {
   const unit = card.querySelector(".item-unit");
   if (isBatch) { unit.value = "sheets"; unit.disabled = true; quantity.step = "1"; quantity.min = "1"; quantity.inputMode = "numeric"; card.querySelector(".quantity-unit-hint").textContent = "(Sheets)"; }
   else { unit.disabled = false; quantity.step = "1"; quantity.min = "1"; quantity.inputMode = "numeric"; card.querySelector(".quantity-unit-hint").textContent = ""; }
+  if (isBatch || unit.value === "sheets") enforceWholeNumber(quantity, 1);
   const isBag = card.querySelector(".item-unit").value === "bags";
   card.querySelector(".per-unit-field").classList.toggle("hidden", !isBag);
   card.querySelector(".pieces-per-unit").required = isBag;
@@ -399,6 +406,7 @@ function renderReceiveItems(record) {
     </article>`;
   }).join("");
   $$("#receiveItems .actual-batch").forEach(input => input.addEventListener("input", () => { input.value = formatBatchDigits(input.value); }));
+  $$("#receiveItems .receive-card").forEach((card, index) => { if (normalizedItems(record)[index]?.unit === "sheets") enforceWholeNumber(card.querySelector(".actual-quantity"), 0); });
   $$("#receiveItems .actual-thickness, #receiveItems .actual-length, #receiveItems .actual-width").forEach(input => input.addEventListener("input", () => { input.value = input.value.replace(/\D/g, ""); const card = input.closest(".receive-card"); const thickness = card.querySelector(".actual-thickness").value; const width = card.querySelector(".actual-width").value; const length = card.querySelector(".actual-length").value; card.querySelector(".actual-stored-size").value = thickness && width && length ? `0.${thickness}*${width}*${length}` : ""; }));
   $$("#receiveItems input, #receiveItems select").forEach(input => input.addEventListener("input", updateReceiveMatches));
   updateReceiveMatches();
@@ -509,6 +517,14 @@ function receiptItemSummary(attempt, record) {
     return `${itemDisplayName(item)}: ${quantity} ${item.unit || ""}${issues ? ` — ${issues}` : ""}`;
   }).join("; ") || "No item details";
 }
+function receiptItemsHtml(attempt, record) {
+  const expected = normalizedItems(record);
+  return (attempt.items || []).map((check, index) => {
+    const item = expected.find(value => value.itemId === check.itemId) || {};
+    const issues = check.discrepancies?.length ? check.discrepancies : check.discrepancyReason ? [check.discrepancyReason] : [];
+    return `<div class="received-item-line"><strong>Item ${index + 1}: ${escapeHtml(itemDisplayName(item))}</strong><span>Received: ${escapeHtml(check.quantityReceived ?? 0)} ${escapeHtml(item.unit || "")}</span>${issues.length ? `<span>Discrepancies: ${issues.map(escapeHtml).join(", ")}</span>` : `<span>Discrepancies: None</span>`}</div>`;
+  }).join("") || `<span>No item details</span>`;
+}
 function openRecordView(record) {
   if (!record) return;
   const items = normalizedItems(record);
@@ -535,7 +551,7 @@ function openRecordView(record) {
       ${items.map((item, index) => { const check = received.get(item.itemId) || {}; const receivedQuantity = check.cumulativeQuantity ?? check.quantityReceived; return `<tr><td>${index + 1}</td><td>${item.type === "BATCH" ? "Tinplate Batch" : "Component"}</td><td>${item.type === "BATCH" ? `${escapeHtml(item.batchNumber)}<br>${escapeHtml(item.size)}` : "—"}</td><td>${escapeHtml(item.description)}</td><td>${item.quantity} ${escapeHtml(item.unit)}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} pieces` : ""}</td><td>${receivedQuantity == null ? "—" : `${receivedQuantity} ${escapeHtml(item.unit)}`}</td><td>${check.matched ? "Complete" : status === "RECEIVED" ? "Complete" : "Outstanding"}</td></tr>`; }).join("")}
     </tbody></table></div></section>
     ${viewerQr}
-    <section class="record-section"><h3>Receiving History (${attempts.length})</h3>${attempts.length ? `<p class="empty-note">The latest attempt is open. Select any earlier attempt to view its details.</p><div class="receiving-history-list">${attempts.slice().reverse().map((attempt, reverseIndex) => { const attemptNumber = attempts.length - reverseIndex; const issues = (attempt.items || []).flatMap(item => item.discrepancies?.length ? item.discrepancies : item.discrepancyReason ? [item.discrepancyReason] : []); const resultText = escapeHtml((attempt.result || "—").replaceAll("_", " ")); return `<details class="receiving-attempt" ${reverseIndex === 0 ? "open" : ""}><summary><span>Attempt ${attemptNumber} · ${formatDate(attempt.checkedAt)}&nbsp;&nbsp;·&nbsp;&nbsp;${resultText}</span></summary><div class="receiving-attempt-body"><div class="record-table-wrap"><table class="details-table"><tbody><tr><th>Receiving PIC</th><td>${escapeHtml(attempt.receivedBy || "—")}</td><th>Entered By</th><td>${escapeHtml(attempt.checkedBy || "—")}</td></tr><tr><th>Condition</th><td>${escapeHtml(attempt.condition || "—")}</td><th>Remarks</th><td>${escapeHtml(attempt.remarks || "—")}</td></tr><tr><th>Items Received</th><td colspan="3">${escapeHtml(receiptItemSummary(attempt, record))}</td></tr><tr><th>All Discrepancies</th><td colspan="3">${issues.length ? `<ul class="discrepancy-list">${issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>` : "None"}</td></tr></tbody></table></div></div></details>`; }).join("")}</div>` : `<p class="empty-note">No receiving attempt has been recorded.</p>`}</section>
+    <section class="record-section"><h3>Receiving History (${attempts.length})</h3>${attempts.length ? `<p class="empty-note">The latest attempt is open. Select any earlier attempt to view its details.</p><div class="receiving-history-list">${attempts.slice().reverse().map((attempt, reverseIndex) => { const attemptNumber = attempts.length - reverseIndex; const issues = (attempt.items || []).flatMap(item => item.discrepancies?.length ? item.discrepancies : item.discrepancyReason ? [item.discrepancyReason] : []); const resultText = escapeHtml((attempt.result || "—").replaceAll("_", " ")); return `<details class="receiving-attempt" ${reverseIndex === 0 ? "open" : ""}><summary><span>Attempt ${attemptNumber} · ${formatDate(attempt.checkedAt)}&nbsp;&nbsp;·&nbsp;&nbsp;${resultText}</span></summary><div class="receiving-attempt-body"><div class="record-table-wrap"><table class="details-table"><tbody><tr><th>Receiving PIC</th><td>${escapeHtml(attempt.receivedBy || "—")}</td><th>Entered By</th><td>${escapeHtml(attempt.checkedBy || "—")}</td></tr><tr><th>Condition</th><td>${escapeHtml(attempt.condition || "—")}</td><th>Remarks</th><td>${escapeHtml(attempt.remarks || "—")}</td></tr><tr><th>Items Received</th><td colspan="3">${receiptItemsHtml(attempt, record)}</td></tr><tr><th>All Discrepancies</th><td colspan="3">${issues.length ? `<ul class="discrepancy-list">${issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>` : "None"}</td></tr></tbody></table></div></div></details>`; }).join("")}</div>` : `<p class="empty-note">No receiving attempt has been recorded.</p>`}</section>
     <section class="record-section"><h3>Corrections (${corrections.length})</h3>${corrections.length ? `<div class="record-table-wrap"><table><thead><tr><th>Date & Time</th><th>Corrected By</th><th>Target</th><th>Field</th><th>Original</th><th>Corrected</th><th>Reason</th></tr></thead><tbody>${corrections.map(change => `<tr><td>${formatDate(change.correctedAt)}</td><td>${escapeHtml(change.correctedBy || "—")}</td><td>${escapeHtml(change.target || "—")}</td><td>${escapeHtml(correctionFieldLabels[change.field] || change.field || "—")}</td><td>${escapeHtml(change.oldValue ?? "—")}</td><td>${escapeHtml(change.newValue ?? "—")}</td><td>${escapeHtml(change.reason || "—")}</td></tr>`).join("")}</tbody></table></div>` : `<p class="empty-note">No corrections have been made.</p>`}</section>
     ${status === "CANCELLED" ? `<section class="record-section"><h3>Cancellation</h3><div class="reason-note"><strong>Cancelled by ${escapeHtml(record.cancelledBy || "—")}</strong><br>${formatDate(record.cancelledAt)}<br>${escapeHtml(record.cancellationReason || "No reason recorded")}</div></section>` : ""}`;
   $("#recordDialog").showModal();
@@ -583,6 +599,7 @@ function updateCorrectionValueControl() {
     control.value = String(current);
   } else if (["quantity", "piecesPerUnit"].includes(field)) {
     control = document.createElement("input"); control.type = "number"; control.inputMode = "numeric"; control.min = "1"; control.step = "1"; control.value = current;
+    if (field === "piecesPerUnit" || targetItem?.unit === "sheets") enforceWholeNumber(control, 1);
   } else if (field === "batchNumber") {
     control = document.createElement("input"); control.type = "text"; control.inputMode = "numeric"; control.pattern = "[0-9/]+"; control.placeholder = "Enter digits only"; control.value = formatBatchDigits(current); control.addEventListener("input", () => control.value = formatBatchDigits(control.value));
   } else if (field === "size") {

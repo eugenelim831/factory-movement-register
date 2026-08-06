@@ -176,6 +176,9 @@ tbody tr:last-child td { border-bottom: 0; }
 .receiving-attempt summary { cursor: pointer; padding: .8rem 1rem; font-weight: 700; display: flex; justify-content: space-between; column-gap: 1.25rem; }
 .receiving-attempt-body { padding: 0 1rem 1rem; }
 .discrepancy-list { margin: .35rem 0 0; padding-left: 1.1rem; color: #9c2f24; }
+.received-item-line { display: grid; gap: .2rem; padding: .55rem 0; white-space: normal; }
+.received-item-line + .received-item-line { border-top: 1px solid var(--line); }
+.received-item-line span { display: block; }
 .viewer-qr { text-align: center; padding: 1rem; background: #f6f8f7; border-radius: 12px; }
 .viewer-qr img { max-width: 190px; height: auto; }
 .qr-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; margin-top: 1rem; }
