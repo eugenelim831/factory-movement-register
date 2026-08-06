@@ -131,6 +131,7 @@
           <button class="link-button clear-signature" data-canvas="receiveSignature" type="button">Clear signature</button>
         </div>
         <label id="receiveOnBehalf" class="on-behalf hidden"><input id="receiveOnBehalfCheck" type="checkbox"> I confirm that I am entering this receipt on behalf of the selected receiving PIC.</label>
+        <label id="completeWithDiscrepancyBox" class="complete-with-discrepancy hidden"><input id="completeWithDiscrepancy" type="checkbox"> <span><strong>Complete Delivery With Recorded Discrepancy</strong><small>Use only when all expected items have arrived, but the actual receipt includes an accepted difference such as excess quantity, wrong batch or damage. The discrepancy remains permanently recorded.</small></span></label>
         <button class="primary submit-button" type="submit">Confirm Item Check</button>
       </form>
     </section>
@@ -142,7 +143,7 @@
       </div>
       <div class="filter-row">
         <input id="recordSearch" type="search" placeholder="Search Delivery ID, batch, item, driver or vehicle">
-        <select id="statusFilter"><option value="">All statuses</option><option value="DRAFT">Draft</option><option value="IN_TRANSIT">In Transit</option><option value="INCOMPLETE">Incomplete</option><option value="RECEIVED">Received</option><option value="CANCELLED">Cancelled</option></select>
+        <select id="statusFilter"><option value="">All statuses</option><option value="DRAFT">Draft</option><option value="IN_TRANSIT">In Transit</option><option value="INCOMPLETE">Incomplete</option><option value="RECEIVED">Received</option><option value="RECEIVED_WITH_DISCREPANCY">Received With Discrepancy</option><option value="CANCELLED">Cancelled</option></select>
       </div>
       <div class="table-wrap"><table>
         <thead><tr><th>Delivery ID</th><th>Direction</th><th>Items</th><th>Driver</th><th>Vehicle</th><th>Dispatch User</th><th>Receiving User</th><th>Dispatched</th><th>Received</th><th>Status</th><th>Action</th></tr></thead>
@@ -206,7 +207,7 @@
   </div></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="qrcode.js?v=22"></script>
-  <script src="app.js?v=22"></script>
+  <script src="qrcode.js?v=23"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>

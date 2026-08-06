@@ -362,7 +362,7 @@ async function loadOpenDeliveries() {
     if (requested) {
       const requestedRecord = records.find(record => record.id === requested);
       if (state.openDeliveries.some(record => record.id === requested)) { select.value = requested; select.dispatchEvent(new Event("change")); }
-      else if (requestedRecord && normalizedStatus(requestedRecord.status) === "RECEIVED") alert(`Delivery ${requested} has already been received and completed.`);
+      else if (requestedRecord && ["RECEIVED", "RECEIVED_WITH_DISCREPANCY"].includes(normalizedStatus(requestedRecord.status))) alert(`Delivery ${requested} has already been received and completed${normalizedStatus(requestedRecord.status) === "RECEIVED_WITH_DISCREPANCY" ? " with a recorded discrepancy" : ""}.`);
       else if (requestedRecord) alert(`Delivery ${requested} is ${normalizedStatus(requestedRecord.status).replaceAll("_", " ")} and cannot be received.`);
       else alert(`Delivery ${requested} was not found.`);
       history.replaceState({}, "", location.pathname);
@@ -455,6 +455,12 @@ function updateReceiveMatches() {
     const detail = $$("#receiveItems .detected-discrepancies")[index];
     detail.innerHTML = result.discrepancies.length ? `<strong>All Discrepancies Detected:</strong><ul class="discrepancy-list">${result.discrepancies.map(value => `<li>${escapeHtml(value)}</li>`).join("")}</ul>` : "";
   });
+  const expectedItems = normalizedItems(state.selectedDelivery);
+  const allExpectedItemsArrived = results.every(result => { const expected = expectedItems.find(item => item.itemId === result.itemId); return result.present && result.cumulativeQuantity >= Number(expected.quantity); });
+  const hasDiscrepancy = results.some(result => result.discrepancies.length > 0);
+  const canCompleteWithDiscrepancy = allExpectedItemsArrived && hasDiscrepancy;
+  $("#completeWithDiscrepancyBox").classList.toggle("hidden", !canCompleteWithDiscrepancy);
+  if (!canCompleteWithDiscrepancy) $("#completeWithDiscrepancy").checked = false;
 }
 
 $("#receiveForm").addEventListener("submit", async event => {
@@ -469,6 +475,7 @@ $("#receiveForm").addEventListener("submit", async event => {
   if (data.receivedBy !== config.user && !$("#receiveOnBehalfCheck").checked) return showToast("Confirm that you are entering this receipt on behalf of the selected PIC.", true);
   if ((!allMatched || data.receiptCondition !== "Good") && !data.receivingRemarks.trim()) return showToast("Remarks are required for an incomplete or damaged delivery.", true);
   data.receivedItems = receivedItems;
+  data.completeWithDiscrepancy = !$("#completeWithDiscrepancyBox").classList.contains("hidden") && $("#completeWithDiscrepancy").checked;
   data.signature = signature;
   data.enteredOnBehalf = data.receivedBy !== config.user;
   delete data.deliveryId;
@@ -476,7 +483,7 @@ $("#receiveForm").addEventListener("submit", async event => {
   try {
     const result = await api(`/records/${encodeURIComponent(state.selectedDelivery.id)}`, { method: "PATCH", body: JSON.stringify(data) });
     showToast(`Delivery marked ${normalizedStatus(result.record.status).replaceAll("_", " ")}.`);
-    form.reset(); state.selectedDelivery = null; $("#deliverySummary").className = "record-summary empty"; $("#deliverySummary").textContent = "Select an open Delivery ID to view all items."; $("#receiveItems").innerHTML = ""; $("#receiveSignature").clearSignature(); await loadOpenDeliveries();
+    form.reset(); $("#completeWithDiscrepancyBox").classList.add("hidden"); state.selectedDelivery = null; $("#deliverySummary").className = "record-summary empty"; $("#deliverySummary").textContent = "Select an open Delivery ID to view all items."; $("#receiveItems").innerHTML = ""; $("#receiveSignature").clearSignature(); await loadOpenDeliveries();
   } catch (error) { showToast(error.message, true); }
   finally { button.disabled = false; button.textContent = "Confirm Item Check"; }
 });
@@ -540,7 +547,7 @@ function openRecordView(record) {
   $("#recordDialogTitle").textContent = record.id;
   $("#recordView").className = "record-view";
   $("#recordView").innerHTML = `
-    <div class="record-view-head"><strong>${escapeHtml(record.direction || "Transfer direction not recorded")}</strong><span class="status-badge ${status === "RECEIVED" ? "returned" : "out"}">${escapeHtml(status.replaceAll("_", " "))}</span></div>
+    <div class="record-view-head"><strong>${escapeHtml(record.direction || "Transfer direction not recorded")}</strong><span class="status-badge ${["RECEIVED", "RECEIVED_WITH_DISCREPANCY"].includes(status) ? "returned" : "out"}">${escapeHtml(status.replaceAll("_", " "))}</span></div>
     <section class="record-section"><h3>Transfer Details</h3><div class="record-table-wrap"><table class="details-table"><tbody>
       <tr><th>Driver</th><td>${escapeHtml(record.driverName || "—")}</td><th>Vehicle</th><td>${escapeHtml(record.vehicleNumber || "—")}</td></tr>
       <tr><th>Purpose</th><td colspan="3">${escapeHtml(record.purpose || "—")}</td></tr>
@@ -548,7 +555,7 @@ function openRecordView(record) {
       <tr><th>Dispatched</th><td>${formatDate(record.timeOut)}</td><th>Dispatch Remarks</th><td>${escapeHtml(record.remarks || "—")}</td></tr>
     </tbody></table></div></section>
     <section class="record-section"><h3>Items (${items.length})</h3><div class="record-table-wrap"><table><thead><tr><th>#</th><th>Type</th><th>Batch / Size</th><th>Description</th><th>Expected</th><th>Received</th><th>Result</th></tr></thead><tbody>
-      ${items.map((item, index) => { const check = received.get(item.itemId) || {}; const receivedQuantity = check.cumulativeQuantity ?? check.quantityReceived; return `<tr><td>${index + 1}</td><td>${item.type === "BATCH" ? "Tinplate Batch" : "Component"}</td><td>${item.type === "BATCH" ? `${escapeHtml(item.batchNumber)}<br>${escapeHtml(item.size)}` : "—"}</td><td>${escapeHtml(item.description)}</td><td>${item.quantity} ${escapeHtml(item.unit)}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} pieces` : ""}</td><td>${receivedQuantity == null ? "—" : `${receivedQuantity} ${escapeHtml(item.unit)}`}</td><td>${check.matched ? "Complete" : status === "RECEIVED" ? "Complete" : "Outstanding"}</td></tr>`; }).join("")}
+      ${items.map((item, index) => { const check = received.get(item.itemId) || {}; const receivedQuantity = check.cumulativeQuantity ?? check.quantityReceived; return `<tr><td>${index + 1}</td><td>${item.type === "BATCH" ? "Tinplate Batch" : "Component"}</td><td>${item.type === "BATCH" ? `${escapeHtml(item.batchNumber)}<br>${escapeHtml(item.size)}` : "—"}</td><td>${escapeHtml(item.description)}</td><td>${item.quantity} ${escapeHtml(item.unit)}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} pieces` : ""}</td><td>${receivedQuantity == null ? "—" : `${receivedQuantity} ${escapeHtml(item.unit)}`}</td><td>${check.matched ? "Complete" : status === "RECEIVED_WITH_DISCREPANCY" ? `<span class="discrepancy-text">Completed With Discrepancy</span>` : status === "RECEIVED" ? "Complete" : "Outstanding"}</td></tr>`; }).join("")}
     </tbody></table></div></section>
     ${viewerQr}
     <section class="record-section"><h3>Receiving History (${attempts.length})</h3>${attempts.length ? `<p class="empty-note">The latest attempt is open. Select any earlier attempt to view its details.</p><div class="receiving-history-list">${attempts.slice().reverse().map((attempt, reverseIndex) => { const attemptNumber = attempts.length - reverseIndex; const resultText = escapeHtml((attempt.result || "—").replaceAll("_", " ")); return `<details class="receiving-attempt" ${reverseIndex === 0 ? "open" : ""}><summary><span>Attempt ${attemptNumber} · ${formatDate(attempt.checkedAt)}&nbsp;&nbsp;·&nbsp;&nbsp;${resultText}</span></summary><div class="receiving-attempt-body"><div class="record-table-wrap"><table class="details-table"><tbody><tr><th>Receiving PIC</th><td>${escapeHtml(attempt.receivedBy || "—")}</td><th>Entered By</th><td>${escapeHtml(attempt.checkedBy || "—")}</td></tr><tr><th>Condition</th><td>${escapeHtml(attempt.condition || "—")}</td><th>Remarks</th><td>${escapeHtml(attempt.remarks || "—")}</td></tr><tr><th>Items Received</th><td colspan="3">${receiptItemsHtml(attempt, record)}</td></tr></tbody></table></div></div></details>`; }).join("")}</div>` : `<p class="empty-note">No receiving attempt has been recorded.</p>`}</section>

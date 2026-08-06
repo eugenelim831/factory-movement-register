@@ -150,6 +150,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .status-cell.OUT, .status-cell.IN_TRANSIT { color: var(--amber); }
 .status-cell.RETURNED, .status-cell.RECEIVED { color: var(--green); }
 .status-cell.PARTIAL, .status-cell.PARTIALLY_RECEIVED, .status-cell.INCOMPLETE { color: var(--danger); }
+.status-cell.RECEIVED_WITH_DISCREPANCY { color: #a05200; }
 .status-cell.DRAFT { color: #7356a5; }
 .status-cell.CANCELLED { color: #68716e; }
 .audit-note { margin-top: 8px; min-width: 150px; color: #5d6965; font-size: .78rem; line-height: 1.35; }
@@ -177,13 +178,17 @@ tbody tr:last-child td { border-bottom: 0; }
 .receiving-attempt-body { padding: 0 1rem 1rem; }
 .discrepancy-list { margin: .35rem 0 0; padding-left: 1.1rem; color: #9c2f24; }
 .received-item-line { display: grid; gap: .2rem; padding: .55rem 0; white-space: normal; }
-.received-item-line + .received-item-line { border-top: 1px solid var(--line); }
+.received-item-line + .received-item-line { margin-top: .35rem; }
 .received-item-line span { display: block; }
 .discrepancy-text { color: var(--danger); font-weight: 850; }
 .additional-issues { display: grid; gap: .65rem; grid-column: 1 / -1; }
 .issue-options { display: flex; flex-wrap: wrap; gap: .65rem 1.25rem; align-items: center; }
 .issue-option { display: inline-flex; gap: .5rem; align-items: center; min-height: 36px; white-space: nowrap; }
 .issue-option input { width: 20px; min-height: 20px; height: 20px; margin: 0; padding: 0; }
+.complete-with-discrepancy { display: flex; align-items: flex-start; gap: .75rem; margin: 1rem 0; padding: .9rem 1rem; border-left: 4px solid var(--amber); border-radius: 8px; background: #fff8e8; }
+.complete-with-discrepancy input { flex: 0 0 20px; width: 20px; min-height: 20px; height: 20px; margin: .15rem 0 0; padding: 0; }
+.complete-with-discrepancy span { display: grid; gap: .25rem; }
+.complete-with-discrepancy small { color: var(--muted); font-weight: 600; line-height: 1.4; }
 .viewer-qr { text-align: center; padding: 1rem; background: #f6f8f7; border-radius: 12px; }
 .viewer-qr img { max-width: 190px; height: auto; }
 .qr-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; margin-top: 1rem; }
