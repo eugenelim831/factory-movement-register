@@ -131,7 +131,7 @@
           <button class="link-button clear-signature" data-canvas="receiveSignature" type="button">Clear signature</button>
         </div>
         <label id="receiveOnBehalf" class="on-behalf hidden"><input id="receiveOnBehalfCheck" type="checkbox"> I confirm that I am entering this receipt on behalf of the selected receiving PIC.</label>
-        <label id="completeWithDiscrepancyBox" class="complete-with-discrepancy hidden"><input id="completeWithDiscrepancy" type="checkbox"> <span><strong>Complete Delivery With Recorded Discrepancy</strong><small>Use only when all expected items have arrived, but the actual receipt includes an accepted difference such as excess quantity, wrong batch or damage. The discrepancy remains permanently recorded.</small></span></label>
+        <label id="completeWithDiscrepancyBox" class="complete-with-discrepancy hidden"><input id="completeWithDiscrepancy" type="checkbox"> <span><strong>Complete Delivery With Recorded Discrepancies</strong><small>Confirm that every discrepancy listed below is accepted. The complete list remains permanently recorded.</small><ul id="acceptedDiscrepancyList" class="acceptance-discrepancy-list"></ul></span></label>
         <button class="primary submit-button" type="submit">Confirm Item Check</button>
       </form>
     </section>
@@ -207,7 +207,7 @@
   </div></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="qrcode.js?v=23"></script>
-  <script src="app.js?v=23"></script>
+  <script src="qrcode.js?v=24"></script>
+  <script src="app.js?v=24"></script>
 </body>
 </html>

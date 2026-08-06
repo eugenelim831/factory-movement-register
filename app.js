@@ -460,7 +460,9 @@ function updateReceiveMatches() {
   const hasDiscrepancy = results.some(result => result.discrepancies.length > 0);
   const canCompleteWithDiscrepancy = allExpectedItemsArrived && hasDiscrepancy;
   $("#completeWithDiscrepancyBox").classList.toggle("hidden", !canCompleteWithDiscrepancy);
-  if (!canCompleteWithDiscrepancy) $("#completeWithDiscrepancy").checked = false;
+  if (canCompleteWithDiscrepancy) {
+    $("#acceptedDiscrepancyList").innerHTML = results.map((result, index) => result.discrepancies.length ? `<li><strong>Item ${index + 1}:</strong> <span class="discrepancy-text">${result.discrepancies.map(escapeHtml).join(", ")}</span></li>` : "").join("");
+  } else { $("#completeWithDiscrepancy").checked = false; $("#acceptedDiscrepancyList").innerHTML = ""; }
 }
 
 $("#receiveForm").addEventListener("submit", async event => {

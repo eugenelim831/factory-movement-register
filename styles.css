@@ -189,6 +189,8 @@ tbody tr:last-child td { border-bottom: 0; }
 .complete-with-discrepancy input { flex: 0 0 20px; width: 20px; min-height: 20px; height: 20px; margin: .15rem 0 0; padding: 0; }
 .complete-with-discrepancy span { display: grid; gap: .25rem; }
 .complete-with-discrepancy small { color: var(--muted); font-weight: 600; line-height: 1.4; }
+.acceptance-discrepancy-list { display: grid; gap: .35rem; margin: .35rem 0 0; padding-left: 1.25rem; }
+.acceptance-discrepancy-list li { line-height: 1.4; }
 .viewer-qr { text-align: center; padding: 1rem; background: #f6f8f7; border-radius: 12px; }
 .viewer-qr img { max-width: 190px; height: auto; }
 .qr-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; margin-top: 1rem; }
