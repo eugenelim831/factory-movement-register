@@ -430,9 +430,11 @@ function recordSearchText(record) { return [record.id, record.direction, record.
 function filteredRecords() { const term = $("#recordSearch").value.trim().toLowerCase(); const status = $("#statusFilter").value; return state.records.filter(record => (!term || recordSearchText(record).includes(term)) && (!status || normalizedStatus(record.status) === status)); }
 function renderRecords() {
   const records = filteredRecords();
-  $("#recordsBody").innerHTML = records.length ? records.map(record => `<tr><td>${escapeHtml(record.id)}</td><td>${escapeHtml(record.direction || "—")}</td><td>${normalizedItems(record).length}</td><td>${escapeHtml(record.driverName)}</td><td>${escapeHtml(record.vehicleNumber || "—")}</td><td>${escapeHtml(record.dispatchedBy || record.createdBy || "—")}</td><td>${escapeHtml(record.lastUpdatedBy || "—")}</td><td>${formatDate(record.timeOut)}</td><td>${record.timeReceived || record.timeIn ? formatDate(record.timeReceived || record.timeIn) : "—"}</td><td class="status-cell ${normalizedStatus(record.status)}">${normalizedStatus(record.status).replaceAll("_", " ")}</td><td><button class="secondary correct-record" data-id="${escapeHtml(record.id)}" type="button">Correct</button>${config.user === "Eugene" && normalizedStatus(record.status) === "IN_TRANSIT" ? ` <button class="secondary danger-button cancel-record" data-id="${escapeHtml(record.id)}" type="button">Cancel</button>` : ""}${normalizedStatus(record.status) === "CANCELLED" ? `<div class="audit-note">${escapeHtml(record.cancelledBy || "Eugene")} · ${formatDate(record.cancelledAt)}<br>${escapeHtml(record.cancellationReason || "No reason recorded")}</div>` : ""}</td></tr>`).join("") : `<tr><td colspan="11" class="empty-cell">No matching records.</td></tr>`;
+  $("#recordsBody").innerHTML = records.length ? records.map(record => `<tr><td>${escapeHtml(record.id)}</td><td>${escapeHtml(record.direction || "—")}</td><td>${normalizedItems(record).length}</td><td>${escapeHtml(record.driverName)}</td><td>${escapeHtml(record.vehicleNumber || "—")}</td><td>${escapeHtml(record.dispatchedBy || record.createdBy || "—")}</td><td>${escapeHtml(record.lastUpdatedBy || "—")}</td><td>${formatDate(record.timeOut)}</td><td>${record.timeReceived || record.timeIn ? formatDate(record.timeReceived || record.timeIn) : "—"}</td><td class="status-cell ${normalizedStatus(record.status)}">${normalizedStatus(record.status).replaceAll("_", " ")}</td><td><button class="primary view-record" data-id="${escapeHtml(record.id)}" type="button">View</button> <button class="secondary correct-record" data-id="${escapeHtml(record.id)}" type="button">Correct</button>${config.user === "Eugene" && normalizedStatus(record.status) === "IN_TRANSIT" ? ` <button class="secondary danger-button cancel-record" data-id="${escapeHtml(record.id)}" type="button">Cancel</button>` : ""}${normalizedStatus(record.status) === "CANCELLED" ? `<div class="audit-note">${escapeHtml(record.cancelledBy || "Eugene")} · ${formatDate(record.cancelledAt)}<br>${escapeHtml(record.cancellationReason || "No reason recorded")}</div>` : ""}</td></tr>`).join("") : `<tr><td colspan="11" class="empty-cell">No matching records.</td></tr>`;
 }
 $("#recordsBody").addEventListener("click", async event => {
+  const viewButton = event.target.closest(".view-record");
+  if (viewButton) return openRecordView(state.records.find(record => record.id === viewButton.dataset.id));
   const correctionButton = event.target.closest(".correct-record");
   if (correctionButton) return openCorrection(state.records.find(record => record.id === correctionButton.dataset.id));
   const cancelButton = event.target.closest(".cancel-record");
@@ -443,6 +445,42 @@ $("#recordsBody").addEventListener("click", async event => {
   cancelButton.disabled = true;
   try { await api(`/records/${encodeURIComponent(cancelButton.dataset.id)}/cancel`, { method: "POST", body: JSON.stringify({ reason }) }); await loadRecords(); showToast(`Delivery ${cancelButton.dataset.id} cancelled.`); } catch (error) { showToast(error.message, true); } finally { cancelButton.disabled = false; }
 });
+
+function itemDisplayName(item) { return item.type === "BATCH" ? `${item.batchNumber || "No batch"}${item.size ? ` · ${item.size}` : ""}` : item.description || "Component"; }
+function receiptItemSummary(attempt, record) {
+  const expected = normalizedItems(record);
+  return (attempt.items || []).map(check => {
+    const item = expected.find(value => value.itemId === check.itemId) || {};
+    const quantity = check.quantityReceived ?? 0;
+    return `${itemDisplayName(item)}: ${quantity} ${item.unit || ""}${check.discrepancyReason ? ` (${check.discrepancyReason})` : ""}`;
+  }).join("; ") || "No item details";
+}
+function openRecordView(record) {
+  if (!record) return;
+  const items = normalizedItems(record);
+  const received = new Map((record.receivedItems || []).map(item => [item.itemId, item]));
+  const attempts = record.receiptAttempts || [];
+  const corrections = record.corrections || [];
+  const status = normalizedStatus(record.status);
+  $("#recordDialogTitle").textContent = record.id;
+  $("#recordView").className = "record-view";
+  $("#recordView").innerHTML = `
+    <div class="record-view-head"><strong>${escapeHtml(record.direction || "Transfer direction not recorded")}</strong><span class="status-badge ${status === "RECEIVED" ? "returned" : "out"}">${escapeHtml(status.replaceAll("_", " "))}</span></div>
+    <section class="record-section"><h3>Transfer Details</h3><div class="record-table-wrap"><table class="details-table"><tbody>
+      <tr><th>Driver</th><td>${escapeHtml(record.driverName || "—")}</td><th>Vehicle</th><td>${escapeHtml(record.vehicleNumber || "—")}</td></tr>
+      <tr><th>Purpose</th><td colspan="3">${escapeHtml(record.purpose || "—")}</td></tr>
+      <tr><th>Released By</th><td>${escapeHtml(record.releasedBy || "—")}</td><th>Entered By</th><td>${escapeHtml(record.dispatchedBy || record.createdBy || "—")}</td></tr>
+      <tr><th>Dispatched</th><td>${formatDate(record.timeOut)}</td><th>Dispatch Remarks</th><td>${escapeHtml(record.remarks || "—")}</td></tr>
+    </tbody></table></div></section>
+    <section class="record-section"><h3>Items (${items.length})</h3><div class="record-table-wrap"><table><thead><tr><th>#</th><th>Type</th><th>Batch / Size</th><th>Description</th><th>Expected</th><th>Received</th><th>Result</th></tr></thead><tbody>
+      ${items.map((item, index) => { const check = received.get(item.itemId) || {}; const receivedQuantity = check.cumulativeQuantity ?? check.quantityReceived; return `<tr><td>${index + 1}</td><td>${item.type === "BATCH" ? "Tinplate Batch" : "Component"}</td><td>${item.type === "BATCH" ? `${escapeHtml(item.batchNumber)}<br>${escapeHtml(item.size)}` : "—"}</td><td>${escapeHtml(item.description)}</td><td>${item.quantity} ${escapeHtml(item.unit)}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} pieces` : ""}</td><td>${receivedQuantity == null ? "—" : `${receivedQuantity} ${escapeHtml(item.unit)}`}</td><td>${check.matched ? "Complete" : status === "RECEIVED" ? "Complete" : "Outstanding"}</td></tr>`; }).join("")}
+    </tbody></table></div></section>
+    <section class="record-section"><h3>Receiving History (${attempts.length})</h3>${attempts.length ? `<div class="record-table-wrap"><table><thead><tr><th>Date & Time</th><th>Receiving PIC</th><th>Entered By</th><th>Condition</th><th>Items Received</th><th>Remarks</th><th>Result</th></tr></thead><tbody>${attempts.map(attempt => `<tr><td>${formatDate(attempt.checkedAt)}</td><td>${escapeHtml(attempt.receivedBy || "—")}</td><td>${escapeHtml(attempt.checkedBy || "—")}</td><td>${escapeHtml(attempt.condition || "—")}</td><td>${escapeHtml(receiptItemSummary(attempt, record))}</td><td>${escapeHtml(attempt.remarks || "—")}</td><td>${escapeHtml((attempt.result || "—").replaceAll("_", " "))}</td></tr>`).join("")}</tbody></table></div>` : `<p class="empty-note">No receiving attempt has been recorded.</p>`}</section>
+    <section class="record-section"><h3>Corrections (${corrections.length})</h3>${corrections.length ? `<div class="record-table-wrap"><table><thead><tr><th>Date & Time</th><th>Corrected By</th><th>Target</th><th>Field</th><th>Original</th><th>Corrected</th><th>Reason</th></tr></thead><tbody>${corrections.map(change => `<tr><td>${formatDate(change.correctedAt)}</td><td>${escapeHtml(change.correctedBy || "—")}</td><td>${escapeHtml(change.target || "—")}</td><td>${escapeHtml(correctionFieldLabels[change.field] || change.field || "—")}</td><td>${escapeHtml(change.oldValue ?? "—")}</td><td>${escapeHtml(change.newValue ?? "—")}</td><td>${escapeHtml(change.reason || "—")}</td></tr>`).join("")}</tbody></table></div>` : `<p class="empty-note">No corrections have been made.</p>`}</section>
+    ${status === "CANCELLED" ? `<section class="record-section"><h3>Cancellation</h3><div class="reason-note"><strong>Cancelled by ${escapeHtml(record.cancelledBy || "—")}</strong><br>${formatDate(record.cancelledAt)}<br>${escapeHtml(record.cancellationReason || "No reason recorded")}</div></section>` : ""}`;
+  $("#recordDialog").showModal();
+}
+$("#closeRecord").addEventListener("click", () => $("#recordDialog").close());
 
 const deliveryCorrectionFields = ["direction","driverName","vehicleNumber","releasedBy","purpose","remarks"];
 const itemCorrectionFields = ["batchNumber","size","description","quantity","unit","piecesPerUnit"];
