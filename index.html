@@ -156,14 +156,14 @@
       <div class="item-card-head"><strong class="item-number">Item</strong><button class="remove-item link-button" type="button">Remove</button></div>
       <div class="form-grid item-fields">
         <label>Item type<select class="item-type" required><option value="BATCH">Tinplate batch</option><option value="COMPONENT">Component</option></select></label>
-        <label class="batch-field">Batch number<input class="batch-number" placeholder="e.g. 1234/56" inputmode="text" autocapitalize="off"></label>
-        <label class="batch-field">Size<input class="item-size" placeholder="e.g. 0.23*950*740"></label>
+        <label class="batch-field">Batch Number<input class="batch-number" placeholder="e.g. enter 123456 for 12/3456" inputmode="numeric" pattern="[0-9/]+" autocomplete="off"></label>
+        <fieldset class="batch-field size-entry"><legend>Tinplate Size</legend><label>Thickness<input class="size-thickness" type="text" inputmode="numeric" pattern="[0-9]+" placeholder="23 → 0.23"></label><label>Length (mm)<input class="size-length" type="number" inputmode="numeric" min="1" step="1" placeholder="950"></label><label>Width (mm)<input class="size-width" type="number" inputmode="numeric" min="1" step="1" placeholder="740"></label><input class="item-size" type="hidden"></fieldset>
         <label>Item description<input class="item-description" required placeholder="e.g. Printed tinplate or 603D lids"></label>
-        <label>Quantity<input class="item-quantity" type="number" inputmode="decimal" min="0.01" step="0.01" required></label>
+        <label>Quantity <span class="quantity-unit-hint"></span><input class="item-quantity" type="number" inputmode="numeric" min="1" step="1" required></label>
         <label>Unit<select class="item-unit" required><option value="pieces">Pieces</option><option value="blanks">Blanks</option><option value="bags">Bags</option><option value="sets">Sets</option><option value="pallets">Pallets</option><option value="sheets">Sheets</option></select></label>
         <label class="per-unit-field hidden">Pieces per bag<input class="pieces-per-unit" type="number" inputmode="numeric" min="1" step="1" placeholder="e.g. 7000"></label>
       </div>
-      <p class="format-hint batch-field">Batch format: numbers/numbers. Size format: 0.decimal*width*length.</p>
+      <p class="format-hint batch-field">Enter batch digits only; the slash is inserted after the first two digits. Enter thickness as 23 for 0.23 mm. Length and width accept whole millimetres only. Tinplate quantity is always recorded in sheets.</p>
     </article>
   </template>
 
@@ -206,7 +206,7 @@
   </div></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="qrcode.js?v=15"></script>
-  <script src="app.js?v=15"></script>
+  <script src="qrcode.js?v=16"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>

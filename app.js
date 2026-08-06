@@ -16,6 +16,24 @@ function showToast(message, error = false) {
   showToast.timer = setTimeout(() => toast.className = "toast", 4000);
 }
 
+function formatBatchDigits(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 30);
+  return digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits;
+}
+function batchIsValid(value) { return /^\d{2}\/\d+$/.test(String(value || "")); }
+function splitSize(value) {
+  const match = String(value || "").match(/^0\.(\d+)\*(\d+)\*(\d+)$/);
+  return match ? { thickness: match[1], length: match[2], width: match[3] } : { thickness: "", length: "", width: "" };
+}
+function composeSize(card) {
+  const thickness = card.querySelector(".size-thickness")?.value.replace(/\D/g, "") || "";
+  const length = card.querySelector(".size-length")?.value || "";
+  const width = card.querySelector(".size-width")?.value || "";
+  const value = thickness && length && width ? `0.${thickness}*${length}*${width}` : "";
+  if (card.querySelector(".item-size")) card.querySelector(".item-size").value = value;
+  return value;
+}
+
 function requireSettings() {
   if (config.apiUrl && config.token) return true;
   if (config.apiUrl && !config.token) { showLogin(); return false; }
@@ -111,14 +129,21 @@ function addDispatchItem(initial = {}) {
   const type = card.querySelector(".item-type");
   const unit = card.querySelector(".item-unit");
   type.value = initial.type || "BATCH";
-  card.querySelector(".batch-number").value = initial.batchNumber || "";
-  card.querySelector(".item-size").value = initial.size || "";
+  const batchInput = card.querySelector(".batch-number");
+  batchInput.value = formatBatchDigits(initial.batchNumber || "");
+  const sizeParts = splitSize(initial.size);
+  card.querySelector(".size-thickness").value = sizeParts.thickness;
+  card.querySelector(".size-length").value = sizeParts.length;
+  card.querySelector(".size-width").value = sizeParts.width;
+  composeSize(card);
   card.querySelector(".item-description").value = initial.description || "";
   card.querySelector(".item-quantity").value = initial.quantity || "";
   unit.value = initial.unit || "pieces";
   card.querySelector(".pieces-per-unit").value = initial.piecesPerUnit || "";
   type.addEventListener("change", () => updateItemCard(card));
   unit.addEventListener("change", () => updateItemCard(card));
+  batchInput.addEventListener("input", () => { batchInput.value = formatBatchDigits(batchInput.value); });
+  card.querySelectorAll(".size-thickness, .size-length, .size-width").forEach(input => input.addEventListener("input", () => { input.value = input.value.replace(/\D/g, ""); composeSize(card); }));
   card.querySelector(".remove-item").addEventListener("click", () => { card.remove(); renumberItems(); scheduleAutoSave(); });
   updateItemCard(card);
   renumberItems();
@@ -129,6 +154,11 @@ function updateItemCard(card) {
   card.querySelectorAll(".batch-field").forEach(element => element.classList.toggle("hidden", !isBatch));
   card.querySelector(".batch-number").required = isBatch;
   card.querySelector(".item-size").required = isBatch;
+  card.querySelectorAll(".size-thickness, .size-length, .size-width").forEach(input => input.required = isBatch);
+  const quantity = card.querySelector(".item-quantity");
+  const unit = card.querySelector(".item-unit");
+  if (isBatch) { unit.value = "sheets"; unit.disabled = true; quantity.step = "1"; quantity.min = "1"; quantity.inputMode = "numeric"; card.querySelector(".quantity-unit-hint").textContent = "(Sheets)"; }
+  else { unit.disabled = false; quantity.step = "1"; quantity.min = "1"; quantity.inputMode = "numeric"; card.querySelector(".quantity-unit-hint").textContent = ""; }
   const isBag = card.querySelector(".item-unit").value === "bags";
   card.querySelector(".per-unit-field").classList.toggle("hidden", !isBag);
   card.querySelector(".pieces-per-unit").required = isBag;
@@ -143,17 +173,19 @@ function collectDispatchItems() {
   return $$("#dispatchItems .item-card").map((card, index) => {
     const type = card.querySelector(".item-type").value;
     const batchNumber = card.querySelector(".batch-number").value.trim().replaceAll(" ", "");
-    const size = card.querySelector(".item-size").value.trim().replace(/[×x]/gi, "*").replaceAll(" ", "");
-    if (type === "BATCH" && !/^\d+\/\d+$/.test(batchNumber)) throw new Error(`Item ${index + 1}: batch number must look like 1234/56.`);
+    const size = composeSize(card);
+    if (type === "BATCH" && !batchIsValid(batchNumber)) throw new Error(`Item ${index + 1}: enter at least three batch digits. The system inserts a slash after the first two digits.`);
     if (type === "BATCH" && !/^0\.\d+\*\d+\*\d+$/.test(size)) throw new Error(`Item ${index + 1}: size must look like 0.23*950*740.`);
+    const quantity = Number(card.querySelector(".item-quantity").value);
+    if (!Number.isInteger(quantity) || quantity <= 0) throw new Error(`Item ${index + 1}: quantity must be a whole number of sheets or units.`);
     return {
       itemId: `ITEM-${index + 1}`,
       type,
       batchNumber: type === "BATCH" ? batchNumber : "",
       size: type === "BATCH" ? size : "",
       description: card.querySelector(".item-description").value.trim(),
-      quantity: Number(card.querySelector(".item-quantity").value),
-      unit: card.querySelector(".item-unit").value,
+      quantity,
+      unit: type === "BATCH" ? "sheets" : card.querySelector(".item-unit").value,
       piecesPerUnit: card.querySelector(".item-unit").value === "bags" ? Number(card.querySelector(".pieces-per-unit").value) : null
     };
   });
@@ -164,10 +196,10 @@ function collectDraftItems() {
     itemId: `ITEM-${index + 1}`,
     type: card.querySelector(".item-type").value,
     batchNumber: card.querySelector(".batch-number").value.trim().replaceAll(" ", ""),
-    size: card.querySelector(".item-size").value.trim().replace(/[×x]/gi, "*").replaceAll(" ", ""),
+    size: composeSize(card),
     description: card.querySelector(".item-description").value.trim(),
     quantity: card.querySelector(".item-quantity").value ? Number(card.querySelector(".item-quantity").value) : null,
-    unit: card.querySelector(".item-unit").value,
+    unit: card.querySelector(".item-type").value === "BATCH" ? "sheets" : card.querySelector(".item-unit").value,
     piecesPerUnit: card.querySelector(".pieces-per-unit").value ? Number(card.querySelector(".pieces-per-unit").value) : null
   }));
 }
@@ -320,7 +352,14 @@ async function loadOpenDeliveries() {
     select.innerHTML = `<option value="">Select Delivery ID</option>` + state.openDeliveries.map(record => `<option value="${escapeHtml(record.id)}">${escapeHtml(record.id)} — ${escapeHtml(record.direction || "Legacy transfer")} — ${normalizedItems(record).length} item(s) — ${normalizedStatus(record.status).replaceAll("_", " ")}</option>`).join("");
     if (!state.openDeliveries.length) select.innerHTML = `<option value="">No open deliveries</option>`;
     const requested = new URLSearchParams(location.search).get("delivery");
-    if (requested && state.openDeliveries.some(record => record.id === requested)) { select.value = requested; select.dispatchEvent(new Event("change")); history.replaceState({}, "", location.pathname); }
+    if (requested) {
+      const requestedRecord = records.find(record => record.id === requested);
+      if (state.openDeliveries.some(record => record.id === requested)) { select.value = requested; select.dispatchEvent(new Event("change")); }
+      else if (requestedRecord && normalizedStatus(requestedRecord.status) === "RECEIVED") alert(`Delivery ${requested} has already been received and completed.`);
+      else if (requestedRecord) alert(`Delivery ${requested} is ${normalizedStatus(requestedRecord.status).replaceAll("_", " ")} and cannot be received.`);
+      else alert(`Delivery ${requested} was not found.`);
+      history.replaceState({}, "", location.pathname);
+    }
   } catch (error) { select.innerHTML = `<option value="">Unable to load deliveries</option>`; showToast(error.message, true); }
 }
 
@@ -348,16 +387,19 @@ function renderReceiveItems(record) {
       <div class="expected-grid">
         <div><span>Type</span><strong>${item.type === "BATCH" ? "Tinplate batch" : "Component"}</strong></div>
         ${item.type === "BATCH" ? `<div><span>Batch</span><strong>${escapeHtml(item.batchNumber)}</strong></div><div><span>Size</span><strong>${escapeHtml(item.size)}</strong></div>` : ""}
-        <div><span>Expected</span><strong>${item.quantity} ${escapeHtml(item.unit)}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} pieces` : ""}</strong></div><div><span>Previously received</span><strong>${priorQuantity}</strong></div><div><span>Outstanding</span><strong>${outstanding}</strong></div>
+        <div><span>Expected</span><strong>${item.quantity} ${escapeHtml(item.unit)}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} pieces` : ""}</strong></div><div><span>Previously Received</span><strong>${priorQuantity} ${escapeHtml(item.unit)}</strong></div><div><span>Outstanding</span><strong>${outstanding} ${escapeHtml(item.unit)}</strong></div>
       </div>
       <div class="form-grid check-fields">
-        <label>Quantity received this time<input class="actual-quantity" type="number" inputmode="decimal" min="0" step="0.01" value="${complete ? 0 : outstanding}" ${complete ? "readonly" : "required"}></label>
+        <label>Quantity Received This Time (${escapeHtml(item.unit)})<input class="actual-quantity" type="number" inputmode="numeric" min="0" step="1" value="${complete ? 0 : outstanding}" ${complete ? "readonly" : "required"}></label>
         ${item.piecesPerUnit ? `<label>Actual pieces per bag<input class="actual-per-unit" type="number" inputmode="numeric" min="0" step="1" value="${item.piecesPerUnit}" ${complete ? "readonly" : "required"}></label>` : ""}
-        <label>Discrepancy reason<select class="discrepancy-reason" ${complete ? "disabled" : ""}><option value="">Select when item is incomplete</option><option>Item missing</option><option>Quantity short</option><option>Quantity excess</option><option>Wrong item</option><option>Wrong batch/size</option><option>Damaged</option><option>Packaging broken</option><option>Other</option></select></label>
+        ${item.type === "BATCH" ? (() => { const size = splitSize(item.size); return `<label>Batch Number Received<input class="actual-batch" inputmode="numeric" value="${escapeHtml(item.batchNumber)}" ${complete ? "readonly" : "required"}></label><fieldset class="size-entry"><legend>Size Received</legend><label>Thickness<input class="actual-thickness" inputmode="numeric" value="${size.thickness}" ${complete ? "readonly" : "required"}></label><label>Length (mm)<input class="actual-length" type="number" inputmode="numeric" min="1" step="1" value="${size.length}" ${complete ? "readonly" : "required"}></label><label>Width (mm)<input class="actual-width" type="number" inputmode="numeric" min="1" step="1" value="${size.width}" ${complete ? "readonly" : "required"}></label></fieldset>`; })() : ""}
+        <fieldset><legend>Additional Issues (select all that apply)</legend><label><input class="additional-issue" type="checkbox" value="Wrong Item" ${complete ? "disabled" : ""}> Wrong Item</label><label><input class="additional-issue" type="checkbox" value="Damaged" ${complete ? "disabled" : ""}> Damaged</label><label><input class="additional-issue" type="checkbox" value="Packaging Broken" ${complete ? "disabled" : ""}> Packaging Broken</label><label><input class="additional-issue" type="checkbox" value="Other" ${complete ? "disabled" : ""}> Other</label></fieldset>
       </div>
-      <div class="match-result" aria-live="polite"></div>
+      <div class="match-result" aria-live="polite"></div><div class="detected-discrepancies"></div>
     </article>`;
   }).join("");
+  $$("#receiveItems .actual-batch").forEach(input => input.addEventListener("input", () => { input.value = formatBatchDigits(input.value); }));
+  $$("#receiveItems .actual-thickness, #receiveItems .actual-length, #receiveItems .actual-width").forEach(input => input.addEventListener("input", () => { input.value = input.value.replace(/\D/g, ""); }));
   $$("#receiveItems input, #receiveItems select").forEach(input => input.addEventListener("input", updateReceiveMatches));
   updateReceiveMatches();
 }
@@ -379,8 +421,18 @@ function collectReceivedItems() {
     const piecesPerUnitReceived = card.querySelector(".actual-per-unit") ? Number(card.querySelector(".actual-per-unit").value || 0) : null;
     const priorQuantity = Number(card.dataset.prior || 0);
     const cumulativeQuantity = priorQuantity + quantityReceived;
-    const matched = (present || priorQuantity >= Number(item.quantity)) && cumulativeQuantity === Number(item.quantity) && (item.piecesPerUnit == null || quantityReceived === 0 || piecesPerUnitReceived === Number(item.piecesPerUnit));
-    return { itemId: item.itemId, present: present || priorQuantity >= Number(item.quantity), quantityReceived, piecesPerUnitReceived, priorQuantity, cumulativeQuantity, matched, discrepancyReason: card.querySelector(".discrepancy-reason")?.value || "" };
+    const actualBatchNumber = card.querySelector(".actual-batch")?.value || "";
+    const actualSize = item.type === "BATCH" ? `0.${card.querySelector(".actual-thickness")?.value || ""}*${card.querySelector(".actual-length")?.value || ""}*${card.querySelector(".actual-width")?.value || ""}` : "";
+    const discrepancies = [];
+    if (!present && priorQuantity < Number(item.quantity)) discrepancies.push("Item Missing");
+    if (cumulativeQuantity < Number(item.quantity)) discrepancies.push("Quantity Short");
+    if (cumulativeQuantity > Number(item.quantity)) discrepancies.push("Quantity Excess");
+    if (item.type === "BATCH" && actualBatchNumber !== item.batchNumber) discrepancies.push("Wrong Batch Number");
+    if (item.type === "BATCH" && actualSize !== item.size) discrepancies.push("Wrong Size");
+    if (item.piecesPerUnit != null && quantityReceived > 0 && piecesPerUnitReceived !== Number(item.piecesPerUnit)) discrepancies.push("Incorrect Pieces Per Bag");
+    card.querySelectorAll(".additional-issue:checked").forEach(input => discrepancies.push(input.value));
+    const matched = discrepancies.length === 0;
+    return { itemId: item.itemId, present: present || priorQuantity >= Number(item.quantity), quantityReceived, piecesPerUnitReceived, priorQuantity, cumulativeQuantity, actualBatchNumber, actualSize, matched, discrepancies, discrepancyReason: discrepancies.join("; ") };
   });
 }
 
@@ -392,6 +444,8 @@ function updateReceiveMatches() {
     box.className = `match-result ${result.matched ? "matched" : "mismatch"}`;
     const expected = normalizedItems(state.selectedDelivery).find(item => item.itemId === result.itemId);
     box.textContent = result.matched ? "✓ Cumulative quantity complete" : result.cumulativeQuantity > Number(expected.quantity) ? `! Quantity exceeds expected by ${result.cumulativeQuantity - Number(expected.quantity)}` : `! ${Number(expected.quantity) - result.cumulativeQuantity} still outstanding`;
+    const detail = $$("#receiveItems .detected-discrepancies")[index];
+    detail.innerHTML = result.discrepancies.length ? `<strong>All Discrepancies Detected:</strong><ul class="discrepancy-list">${result.discrepancies.map(value => `<li>${escapeHtml(value)}</li>`).join("")}</ul>` : "";
   });
 }
 
@@ -405,7 +459,6 @@ $("#receiveForm").addEventListener("submit", async event => {
   const allMatched = receivedItems.every(item => item.matched);
   const data = Object.fromEntries(new FormData(form));
   if (data.receivedBy !== config.user && !$("#receiveOnBehalfCheck").checked) return showToast("Confirm that you are entering this receipt on behalf of the selected PIC.", true);
-  if (receivedItems.some(item => !item.matched && !item.discrepancyReason)) return showToast("Select a discrepancy reason for every incomplete item.", true);
   if ((!allMatched || data.receiptCondition !== "Good") && !data.receivingRemarks.trim()) return showToast("Remarks are required for an incomplete or damaged delivery.", true);
   data.receivedItems = receivedItems;
   data.signature = signature;
@@ -452,7 +505,8 @@ function receiptItemSummary(attempt, record) {
   return (attempt.items || []).map(check => {
     const item = expected.find(value => value.itemId === check.itemId) || {};
     const quantity = check.quantityReceived ?? 0;
-    return `${itemDisplayName(item)}: ${quantity} ${item.unit || ""}${check.discrepancyReason ? ` (${check.discrepancyReason})` : ""}`;
+    const issues = check.discrepancies?.length ? check.discrepancies.join(", ") : check.discrepancyReason;
+    return `${itemDisplayName(item)}: ${quantity} ${item.unit || ""}${issues ? ` — ${issues}` : ""}`;
   }).join("; ") || "No item details";
 }
 function openRecordView(record) {
@@ -462,6 +516,11 @@ function openRecordView(record) {
   const attempts = record.receiptAttempts || [];
   const corrections = record.corrections || [];
   const status = normalizedStatus(record.status);
+  let viewerQr = "";
+  if (["IN_TRANSIT", "INCOMPLETE"].includes(status)) {
+    const url = deliveryQrUrl(record.id); const qr = qrcode(0, "M"); qr.addData(url); qr.make();
+    viewerQr = `<section class="record-section"><h3>Receiving QR Code</h3><div class="viewer-qr"><p>Scan to open this delivery on the Receiving tab.</p>${qr.createImgTag(5, 6)}</div></section>`;
+  }
   $("#recordDialogTitle").textContent = record.id;
   $("#recordView").className = "record-view";
   $("#recordView").innerHTML = `
@@ -475,7 +534,8 @@ function openRecordView(record) {
     <section class="record-section"><h3>Items (${items.length})</h3><div class="record-table-wrap"><table><thead><tr><th>#</th><th>Type</th><th>Batch / Size</th><th>Description</th><th>Expected</th><th>Received</th><th>Result</th></tr></thead><tbody>
       ${items.map((item, index) => { const check = received.get(item.itemId) || {}; const receivedQuantity = check.cumulativeQuantity ?? check.quantityReceived; return `<tr><td>${index + 1}</td><td>${item.type === "BATCH" ? "Tinplate Batch" : "Component"}</td><td>${item.type === "BATCH" ? `${escapeHtml(item.batchNumber)}<br>${escapeHtml(item.size)}` : "—"}</td><td>${escapeHtml(item.description)}</td><td>${item.quantity} ${escapeHtml(item.unit)}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} pieces` : ""}</td><td>${receivedQuantity == null ? "—" : `${receivedQuantity} ${escapeHtml(item.unit)}`}</td><td>${check.matched ? "Complete" : status === "RECEIVED" ? "Complete" : "Outstanding"}</td></tr>`; }).join("")}
     </tbody></table></div></section>
-    <section class="record-section"><h3>Receiving History (${attempts.length})</h3>${attempts.length ? `<div class="record-table-wrap"><table><thead><tr><th>Date & Time</th><th>Receiving PIC</th><th>Entered By</th><th>Condition</th><th>Items Received</th><th>Remarks</th><th>Result</th></tr></thead><tbody>${attempts.map(attempt => `<tr><td>${formatDate(attempt.checkedAt)}</td><td>${escapeHtml(attempt.receivedBy || "—")}</td><td>${escapeHtml(attempt.checkedBy || "—")}</td><td>${escapeHtml(attempt.condition || "—")}</td><td>${escapeHtml(receiptItemSummary(attempt, record))}</td><td>${escapeHtml(attempt.remarks || "—")}</td><td>${escapeHtml((attempt.result || "—").replaceAll("_", " "))}</td></tr>`).join("")}</tbody></table></div>` : `<p class="empty-note">No receiving attempt has been recorded.</p>`}</section>
+    ${viewerQr}
+    <section class="record-section"><h3>Receiving History (${attempts.length})</h3>${attempts.length ? `<p class="empty-note">The latest attempt is open. Select any earlier attempt to view its details.</p><div class="receiving-history-list">${attempts.slice().reverse().map((attempt, reverseIndex) => { const attemptNumber = attempts.length - reverseIndex; const issues = (attempt.items || []).flatMap(item => item.discrepancies?.length ? item.discrepancies : item.discrepancyReason ? [item.discrepancyReason] : []); return `<details class="receiving-attempt" ${reverseIndex === 0 ? "open" : ""}><summary><span>Attempt ${attemptNumber} · ${formatDate(attempt.checkedAt)}</span><span>${escapeHtml((attempt.result || "—").replaceAll("_", " "))}</span></summary><div class="receiving-attempt-body"><div class="record-table-wrap"><table class="details-table"><tbody><tr><th>Receiving PIC</th><td>${escapeHtml(attempt.receivedBy || "—")}</td><th>Entered By</th><td>${escapeHtml(attempt.checkedBy || "—")}</td></tr><tr><th>Condition</th><td>${escapeHtml(attempt.condition || "—")}</td><th>Remarks</th><td>${escapeHtml(attempt.remarks || "—")}</td></tr><tr><th>Items Received</th><td colspan="3">${escapeHtml(receiptItemSummary(attempt, record))}</td></tr><tr><th>All Discrepancies</th><td colspan="3">${issues.length ? `<ul class="discrepancy-list">${issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>` : "None"}</td></tr></tbody></table></div></div></details>`; }).join("")}</div>` : `<p class="empty-note">No receiving attempt has been recorded.</p>`}</section>
     <section class="record-section"><h3>Corrections (${corrections.length})</h3>${corrections.length ? `<div class="record-table-wrap"><table><thead><tr><th>Date & Time</th><th>Corrected By</th><th>Target</th><th>Field</th><th>Original</th><th>Corrected</th><th>Reason</th></tr></thead><tbody>${corrections.map(change => `<tr><td>${formatDate(change.correctedAt)}</td><td>${escapeHtml(change.correctedBy || "—")}</td><td>${escapeHtml(change.target || "—")}</td><td>${escapeHtml(correctionFieldLabels[change.field] || change.field || "—")}</td><td>${escapeHtml(change.oldValue ?? "—")}</td><td>${escapeHtml(change.newValue ?? "—")}</td><td>${escapeHtml(change.reason || "—")}</td></tr>`).join("")}</tbody></table></div>` : `<p class="empty-note">No corrections have been made.</p>`}</section>
     ${status === "CANCELLED" ? `<section class="record-section"><h3>Cancellation</h3><div class="reason-note"><strong>Cancelled by ${escapeHtml(record.cancelledBy || "—")}</strong><br>${formatDate(record.cancelledAt)}<br>${escapeHtml(record.cancellationReason || "No reason recorded")}</div></section>` : ""}`;
   $("#recordDialog").showModal();
@@ -492,7 +552,9 @@ function openCorrection(record) {
   updateCorrectionFields(); $("#correctionReason").value = ""; $("#correctionDialog").showModal();
 }
 function updateCorrectionFields() {
-  const fields = $("#correctionTarget").value === "DELIVERY" ? deliveryCorrectionFields : itemCorrectionFields;
+  const target = $("#correctionTarget").value;
+  const item = normalizedItems(state.correctionRecord).find(value => value.itemId === target);
+  const fields = target === "DELIVERY" ? deliveryCorrectionFields : item?.type === "BATCH" ? ["batchNumber", "size", "description", "quantity", "unit"] : itemCorrectionFields;
   $("#correctionField").innerHTML = fields.map(field => `<option value="${field}">${correctionFieldLabels[field]}</option>`).join("");
   updateCorrectionValueControl();
 }
@@ -511,35 +573,39 @@ function correctionCurrentValue() {
 function updateCorrectionValueControl() {
   const field = $("#correctionField").value;
   const current = correctionCurrentValue();
+  const targetItem = normalizedItems(state.correctionRecord).find(item => item.itemId === $("#correctionTarget").value);
   let control;
   if (correctionOptions[field]) {
     control = document.createElement("select");
-    correctionOptions[field].forEach(value => { const option = document.createElement("option"); option.value = value; option.textContent = value.charAt(0).toUpperCase() + value.slice(1); control.appendChild(option); });
+    const values = field === "unit" && targetItem?.type === "BATCH" ? ["sheets"] : correctionOptions[field];
+    values.forEach(value => { const option = document.createElement("option"); option.value = value; option.textContent = value.charAt(0).toUpperCase() + value.slice(1); control.appendChild(option); });
     control.value = String(current);
   } else if (["quantity", "piecesPerUnit"].includes(field)) {
-    control = document.createElement("input"); control.type = "number"; control.inputMode = field === "piecesPerUnit" ? "numeric" : "decimal"; control.min = field === "piecesPerUnit" ? "1" : "0.01"; control.step = field === "piecesPerUnit" ? "1" : "0.01"; control.value = current;
+    control = document.createElement("input"); control.type = "number"; control.inputMode = "numeric"; control.min = "1"; control.step = "1"; control.value = current;
   } else if (field === "batchNumber") {
-    control = document.createElement("input"); control.type = "text"; control.inputMode = "text"; control.pattern = "[0-9]+/[0-9]+"; control.placeholder = "e.g. 1234/56"; control.value = current;
+    control = document.createElement("input"); control.type = "text"; control.inputMode = "numeric"; control.pattern = "[0-9/]+"; control.placeholder = "Enter digits only"; control.value = formatBatchDigits(current); control.addEventListener("input", () => control.value = formatBatchDigits(control.value));
   } else if (field === "size") {
-    control = document.createElement("input"); control.type = "text"; control.inputMode = "decimal"; control.pattern = "0\\.[0-9]+[*x×][0-9]+[*x×][0-9]+"; control.placeholder = "e.g. 0.23*950*740"; control.value = current;
+    const parts = splitSize(current); control = document.createElement("fieldset"); control.className = "size-entry"; control.innerHTML = `<legend>Corrected Size</legend><label>Thickness<input class="correction-size-part" data-part="thickness" inputmode="numeric" value="${parts.thickness}" required></label><label>Length (mm)<input class="correction-size-part" data-part="length" type="number" inputmode="numeric" min="1" step="1" value="${parts.length}" required></label><label>Width (mm)<input class="correction-size-part" data-part="width" type="number" inputmode="numeric" min="1" step="1" value="${parts.width}" required></label><input id="correctionValue" type="hidden" value="${escapeHtml(current)}">`;
+    control.querySelectorAll(".correction-size-part").forEach(input => input.addEventListener("input", () => { input.value = input.value.replace(/\D/g, ""); const values = Object.fromEntries([...control.querySelectorAll(".correction-size-part")].map(part => [part.dataset.part, part.value])); control.querySelector("#correctionValue").value = `0.${values.thickness}*${values.length}*${values.width}`; }));
   } else {
     control = document.createElement("input"); control.type = "text"; control.maxLength = 500; control.value = current;
   }
-  control.id = "correctionValue"; control.required = true; $("#correctionValueControl").replaceChildren(control);
+  if (field !== "size") { control.id = "correctionValue"; control.required = true; }
+  $("#correctionValueControl").replaceChildren(control);
 }
 $("#correctionTarget").addEventListener("change", updateCorrectionFields);
 $("#correctionField").addEventListener("change", updateCorrectionValueControl);
 $("#closeCorrection").addEventListener("click", () => $("#correctionDialog").close());
 $("#correctionForm").addEventListener("submit", async event => {
   event.preventDefault(); const button = event.currentTarget.querySelector("[type=submit]"); button.disabled = true;
-  try { await api(`/records/${encodeURIComponent($("#correctionDeliveryId").value)}/corrections`, { method: "POST", body: JSON.stringify({ target: $("#correctionTarget").value, field: $("#correctionField").value, value: $("#correctionValue").value, reason: $("#correctionReason").value.trim() }) }); $("#correctionDialog").close(); await loadRecords(); showToast("Correction saved with its audit history."); } catch (error) { showToast(error.message, true); } finally { button.disabled = false; }
+  try { const field = $("#correctionField").value; const value = $("#correctionValue").value; if (field === "batchNumber" && !batchIsValid(value)) throw new Error("Enter at least three batch digits; the slash is inserted after the first two digits."); if (["quantity", "piecesPerUnit"].includes(field) && (!Number.isInteger(Number(value)) || Number(value) <= 0)) throw new Error("Corrected quantity must be a positive whole number."); await api(`/records/${encodeURIComponent($("#correctionDeliveryId").value)}/corrections`, { method: "POST", body: JSON.stringify({ target: $("#correctionTarget").value, field, value, reason: $("#correctionReason").value.trim() }) }); $("#correctionDialog").close(); await loadRecords(); showToast("Correction saved with its audit history."); } catch (error) { showToast(error.message, true); } finally { button.disabled = false; }
 });
 
 function showQr(id) {
-  const url = new URL(location.href); url.search = ""; url.hash = ""; url.searchParams.set("delivery", id);
-  const qr = qrcode(0, "M"); qr.addData(url.toString()); qr.make();
+  const qr = qrcode(0, "M"); qr.addData(deliveryQrUrl(id)); qr.make();
   $("#qrDeliveryId").textContent = id; $("#qrCode").innerHTML = qr.createImgTag(6, 8); $("#qrDialog").showModal();
 }
+function deliveryQrUrl(id) { const url = new URL(location.href); url.search = ""; url.hash = ""; url.searchParams.set("delivery", id); return url.toString(); }
 $("#closeQr").addEventListener("click", () => $("#qrDialog").close());
 $("#printQr").addEventListener("click", () => window.print());
 $("#refreshRecords").addEventListener("click", loadRecords);
