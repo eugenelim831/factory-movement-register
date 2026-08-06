@@ -165,10 +165,11 @@ tbody tr:last-child td { border-bottom: 0; }
 .record-view .details-table th { width: 180px; text-align: left; }
 .record-view .empty-note { margin: 0; padding: 14px; color: var(--muted); background: #f5f8f7; border-radius: 10px; }
 .record-view .reason-note { padding: 13px; border-left: 4px solid var(--danger); background: #fff4f2; border-radius: 8px; }
-.size-entry { border: 0; padding: 0; display: grid; grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 1rem; }
-.size-entry legend { padding: 0 .35rem; font-weight: 700; }
-.size-entry label { margin: 0; }
-.size-entry small { display: block; margin-top: .4rem; color: var(--muted); font-weight: 600; }
+.size-entry { border: 0; padding: 0; display: grid; grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 1rem; align-items: start; }
+.size-entry legend { grid-column: 1 / -1; padding: 0 .35rem; font-weight: 700; }
+.size-entry label { display: grid; grid-template-rows: 1.5rem 48px 1.5rem; gap: 7px; margin: 0; align-self: start; white-space: nowrap; }
+.size-entry label > input { grid-row: 2; min-height: 48px; height: 48px; }
+.size-entry small { grid-row: 3; display: block; margin: 0; color: var(--muted); font-weight: 600; }
 .stored-size { background: #eef3f1; color: #52615c; font-weight: 750; }
 .receiving-history-list { display: grid; gap: .65rem; }
 .receiving-attempt { border: 1px solid var(--line); border-radius: 10px; background: #fff; }
@@ -207,6 +208,7 @@ dialog form { display: grid; gap: 18px; padding: 26px; }
   .expected-grid { grid-template-columns: 1fr 1fr; }
   .draft-bar, .form-actions { grid-template-columns: 1fr; }
   .size-entry, .qr-actions { grid-template-columns: 1fr; }
+  .size-entry label { white-space: normal; }
 }
 
 @media print {
