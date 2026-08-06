@@ -201,13 +201,22 @@
     <button class="primary" type="submit">Save Correction</button>
   </form></dialog>
 
+  <dialog id="cancelDialog"><form id="cancelForm">
+    <div class="dialog-heading"><h2>Cancel In-Transit Delivery</h2><button class="icon-button" id="closeCancel" type="button" aria-label="Close">×</button></div>
+    <p>The delivery will be marked <strong>CANCELLED</strong>, removed from Receiving, and retained permanently in Records for audit.</p>
+    <label>Delivery ID<input id="cancelDeliveryId" readonly></label>
+    <label>Compulsory cancellation reason<textarea id="cancelReason" rows="4" maxlength="500" required></textarea></label>
+    <label class="confirmation-check"><input id="cancelConfirm" type="checkbox" required> <span>I confirm that this in-transit delivery must be cancelled.</span></label>
+    <button class="primary danger-button" type="submit">Cancel and Retain Record</button>
+  </form></dialog>
+
   <dialog id="recordDialog" class="record-dialog"><div class="dialog-content">
     <div class="dialog-heading"><div><p class="step">Read-only record</p><h2 id="recordDialogTitle">Delivery Record</h2></div><button id="closeRecord" class="icon-button" type="button" aria-label="Close record">×</button></div>
     <div id="recordView"></div>
   </div></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="qrcode.js?v=24"></script>
-  <script src="app.js?v=24"></script>
+  <script src="qrcode.js?v=25"></script>
+  <script src="app.js?v=25"></script>
 </body>
 </html>

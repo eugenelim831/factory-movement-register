@@ -1,4 +1,4 @@
-const state = { records: [], openDeliveries: [], selectedDelivery: null, drafts: [], editingDraftId: null, autoSaveTimer: null, autoSaveBusy: false, correctionRecord: null, currentQrDataUrl: "", currentQrId: "" };
+const state = { records: [], openDeliveries: [], selectedDelivery: null, drafts: [], editingDraftId: null, autoSaveTimer: null, autoSaveBusy: false, correctionRecord: null, cancelRecord: null, currentQrDataUrl: "", currentQrId: "", inactivityTimer: null, inactivityWarningTimer: null };
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const DEFAULT_API_URL = "https://factory-movement-api.eugenelim831-1b3.workers.dev";
@@ -55,7 +55,7 @@ async function api(path, options = {}) {
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${config.token}`, ...(options.headers || {}) }
   });
   const body = await response.json().catch(() => ({}));
-  if (response.status === 401) { sessionStorage.removeItem("movementSessionToken"); sessionStorage.removeItem("movementSessionUser"); updateCurrentUser(); showLogin(); }
+  if (response.status === 401) { clearSession(); showLogin(); }
   if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
   return body;
 }
@@ -64,6 +64,9 @@ function setupSignature(canvas) {
   const context = canvas.getContext("2d");
   let drawing = false;
   let hasInk = false;
+  let totalDistance = 0;
+  let movementPoints = 0;
+  let lastPoint = null;
   function resize() {
     const ratio = Math.max(window.devicePixelRatio || 1, 1);
     const rect = canvas.getBoundingClientRect();
@@ -77,11 +80,11 @@ function setupSignature(canvas) {
     if (saved) { const image = new Image(); image.onload = () => context.drawImage(image, 0, 0, rect.width, rect.height); image.src = saved; }
   }
   function point(event) { const rect = canvas.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top }; }
-  canvas.addEventListener("pointerdown", event => { drawing = true; hasInk = true; canvas.setPointerCapture(event.pointerId); const p = point(event); context.beginPath(); context.moveTo(p.x, p.y); });
-  canvas.addEventListener("pointermove", event => { if (!drawing) return; const p = point(event); context.lineTo(p.x, p.y); context.stroke(); });
-  canvas.addEventListener("pointerup", () => drawing = false);
-  canvas.addEventListener("pointercancel", () => drawing = false);
-  canvas.clearSignature = () => { context.clearRect(0, 0, canvas.width, canvas.height); hasInk = false; };
+  canvas.addEventListener("pointerdown", event => { drawing = true; canvas.setPointerCapture(event.pointerId); const p = point(event); lastPoint = p; context.beginPath(); context.moveTo(p.x, p.y); });
+  canvas.addEventListener("pointermove", event => { if (!drawing) return; const p = point(event); if (lastPoint) { totalDistance += Math.hypot(p.x - lastPoint.x, p.y - lastPoint.y); movementPoints += 1; } lastPoint = p; context.lineTo(p.x, p.y); context.stroke(); hasInk = totalDistance >= 30 && movementPoints >= 3; });
+  canvas.addEventListener("pointerup", () => { drawing = false; lastPoint = null; });
+  canvas.addEventListener("pointercancel", () => { drawing = false; lastPoint = null; });
+  canvas.clearSignature = () => { context.clearRect(0, 0, canvas.width, canvas.height); hasInk = false; totalDistance = 0; movementPoints = 0; lastPoint = null; };
   canvas.signatureData = () => hasInk ? canvas.toDataURL("image/png") : "";
   new ResizeObserver(resize).observe(canvas);
 }
@@ -106,6 +109,14 @@ function updateCurrentUser() {
   $("#headerLoginButton").classList.toggle("hidden", signedIn);
   $("#logoutButton").classList.toggle("hidden", !signedIn);
 }
+function clearSession() { sessionStorage.removeItem("movementSessionToken"); sessionStorage.removeItem("movementSessionUser"); clearTimeout(state.inactivityTimer); clearTimeout(state.inactivityWarningTimer); updateCurrentUser(); }
+function resetInactivityTimer() {
+  if (!config.token) return;
+  clearTimeout(state.inactivityTimer); clearTimeout(state.inactivityWarningTimer);
+  state.inactivityWarningTimer = setTimeout(() => showToast("You will be logged out in 2 minutes due to inactivity."), 28 * 60 * 1000);
+  state.inactivityTimer = setTimeout(() => { clearSession(); showLogin(); showToast("You were logged out after 30 minutes of inactivity.", true); }, 30 * 60 * 1000);
+}
+["pointerdown", "keydown", "touchstart"].forEach(type => document.addEventListener(type, resetInactivityTimer, { passive: true }));
 function showLogin() {
   if ($("#settingsDialog").open) $("#settingsDialog").close();
   if (!$("#loginDialog").open) $("#loginDialog").showModal();
@@ -121,12 +132,12 @@ $("#loginForm").addEventListener("submit", async event => {
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || "Login failed.");
     sessionStorage.setItem("movementSessionToken", body.token); sessionStorage.setItem("movementSessionUser", body.user);
-    $("#loginPin").value = ""; $("#loginDialog").close(); updateCurrentUser(); showToast(`Logged in as ${body.user}.`); new URLSearchParams(location.search).get("delivery") ? switchView("receive") : loadDrafts();
+    $("#loginPin").value = ""; $("#loginDialog").close(); updateCurrentUser(); resetInactivityTimer(); showToast(`Logged in as ${body.user}.`); new URLSearchParams(location.search).get("delivery") ? switchView("receive") : loadDrafts();
   } catch (error) { showToast(error.message, true); }
   finally { button.disabled = false; button.textContent = "Log in"; }
 });
 $("#headerLoginButton").addEventListener("click", showLogin);
-$("#logoutButton").addEventListener("click", () => { sessionStorage.removeItem("movementSessionToken"); sessionStorage.removeItem("movementSessionUser"); updateCurrentUser(); showLogin(); });
+$("#logoutButton").addEventListener("click", () => { clearSession(); showLogin(); });
 
 function addDispatchItem(initial = {}) {
   const fragment = $("#dispatchItemTemplate").content.cloneNode(true);
@@ -389,7 +400,7 @@ function renderReceiveItems(record) {
     const priorQuantity = totals.get(item.itemId) || 0;
     const outstanding = Math.max(Number(item.quantity) - priorQuantity, 0);
     const complete = outstanding === 0;
-    return `<article class="receive-card${complete ? " item-complete" : ""}" data-item-id="${escapeHtml(item.itemId)}" data-prior="${priorQuantity}">
+    return `<article class="receive-card${complete ? " item-complete" : ""}" data-item-id="${escapeHtml(item.itemId)}" data-prior="${priorQuantity}" data-expected="${Number(item.quantity)}">
       <div class="receive-card-title"><div><span>Item ${index + 1}</span><strong>${escapeHtml(item.description)}</strong></div><label class="present-check"><input class="item-present" type="checkbox" ${complete ? "checked disabled" : ""}> ${complete ? "Complete" : "Item present"}</label></div>
       <div class="expected-grid">
         <div><span>Type</span><strong>${item.type === "BATCH" ? "Tinplate batch" : "Component"}</strong></div>
@@ -397,7 +408,7 @@ function renderReceiveItems(record) {
         <div><span>Expected</span><strong>${item.quantity} ${escapeHtml(item.unit)}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} pieces` : ""}</strong></div><div><span>Previously Received</span><strong>${priorQuantity} ${escapeHtml(item.unit)}</strong></div><div><span>Outstanding</span><strong>${outstanding} ${escapeHtml(item.unit)}</strong></div>
       </div>
       <div class="form-grid check-fields">
-        <label>Quantity Received This Time (${escapeHtml(item.unit)})<input class="actual-quantity" type="number" inputmode="numeric" min="0" step="1" value="${complete ? 0 : outstanding}" ${complete ? "readonly" : "required"}></label>
+        <label>Quantity Received This Time (${escapeHtml(item.unit)})<input class="actual-quantity" type="number" inputmode="numeric" min="0" step="1" value="0" ${complete ? "readonly" : "required"}></label>
         ${item.piecesPerUnit ? `<label>Actual pieces per bag<input class="actual-per-unit" type="number" inputmode="numeric" min="0" step="1" value="${item.piecesPerUnit}" ${complete ? "readonly" : "required"}></label>` : ""}
         ${item.type === "BATCH" ? (() => { const size = splitSize(item.size); return `<label>Batch Number Received<input class="actual-batch" inputmode="numeric" value="${escapeHtml(item.batchNumber)}" ${complete ? "readonly" : "required"}></label><fieldset class="size-entry"><legend>Size Received</legend><label>Thickness<input class="actual-thickness" inputmode="numeric" value="${size.thickness}" ${complete ? "readonly" : "required"}><small>Enter 23 for 0.23 mm</small></label><label>Width (mm)<input class="actual-width" type="number" inputmode="numeric" min="1" step="1" value="${size.width}" ${complete ? "readonly" : "required"}></label><label>Length (mm)<input class="actual-length" type="number" inputmode="numeric" min="1" step="1" value="${size.length}" ${complete ? "readonly" : "required"}></label><label>Stored Dimensions<input class="actual-stored-size stored-size" value="${escapeHtml(item.size)}" readonly></label></fieldset>`; })() : ""}
         <div class="additional-issues"><strong>Additional Issues (select all that apply)</strong><div class="issue-options"><label class="issue-option"><input class="additional-issue" type="checkbox" value="Wrong Item" ${complete ? "disabled" : ""}><span>Wrong Item</span></label><label class="issue-option"><input class="additional-issue" type="checkbox" value="Damaged" ${complete ? "disabled" : ""}><span>Damaged</span></label><label class="issue-option"><input class="additional-issue" type="checkbox" value="Packaging Broken" ${complete ? "disabled" : ""}><span>Packaging Broken</span></label></div></div>
@@ -407,6 +418,12 @@ function renderReceiveItems(record) {
   }).join("");
   $$("#receiveItems .actual-batch").forEach(input => input.addEventListener("input", () => { input.value = formatBatchDigits(input.value); }));
   $$("#receiveItems .receive-card").forEach((card, index) => { if (normalizedItems(record)[index]?.unit === "sheets") enforceWholeNumber(card.querySelector(".actual-quantity"), 0); });
+  $$("#receiveItems .receive-card").forEach(card => {
+    const present = card.querySelector(".item-present"); const quantity = card.querySelector(".actual-quantity");
+    if (present.disabled) return;
+    present.addEventListener("change", () => { if (present.checked && Number(quantity.value) === 0) quantity.value = String(Math.max(Number(card.dataset.expected || 0) - Number(card.dataset.prior || 0), 0)); if (!present.checked) quantity.value = "0"; updateReceiveMatches(); });
+    quantity.addEventListener("input", () => { present.checked = Number(quantity.value) > 0; });
+  });
   $$("#receiveItems .actual-thickness, #receiveItems .actual-length, #receiveItems .actual-width").forEach(input => input.addEventListener("input", () => { input.value = input.value.replace(/\D/g, ""); const card = input.closest(".receive-card"); const thickness = card.querySelector(".actual-thickness").value; const width = card.querySelector(".actual-width").value; const length = card.querySelector(".actual-length").value; card.querySelector(".actual-stored-size").value = thickness && width && length ? `0.${thickness}*${width}*${length}` : ""; }));
   $$("#receiveItems input, #receiveItems select").forEach(input => input.addEventListener("input", updateReceiveMatches));
   updateReceiveMatches();
@@ -451,7 +468,7 @@ function updateReceiveMatches() {
     const box = $$("#receiveItems .match-result")[index];
     box.className = `match-result ${result.matched ? "matched" : "mismatch"}`;
     const expected = normalizedItems(state.selectedDelivery).find(item => item.itemId === result.itemId);
-    box.textContent = result.matched ? "✓ Cumulative quantity complete" : result.cumulativeQuantity > Number(expected.quantity) ? `! Quantity exceeds expected by ${result.cumulativeQuantity - Number(expected.quantity)}` : `! ${Number(expected.quantity) - result.cumulativeQuantity} still outstanding`;
+    box.textContent = result.matched ? "✓ Cumulative quantity complete" : !result.present && result.priorQuantity < Number(expected.quantity) ? "! Item has not been confirmed as present" : result.cumulativeQuantity > Number(expected.quantity) ? `! Quantity exceeds expected by ${result.cumulativeQuantity - Number(expected.quantity)}` : `! ${Number(expected.quantity) - result.cumulativeQuantity} still outstanding`;
     const detail = $$("#receiveItems .detected-discrepancies")[index];
     detail.innerHTML = result.discrepancies.length ? `<strong>All Discrepancies Detected:</strong><ul class="discrepancy-list">${result.discrepancies.map(value => `<li>${escapeHtml(value)}</li>`).join("")}</ul>` : "";
   });
@@ -509,11 +526,24 @@ $("#recordsBody").addEventListener("click", async event => {
   if (correctionButton) return openCorrection(state.records.find(record => record.id === correctionButton.dataset.id));
   const cancelButton = event.target.closest(".cancel-record");
   if (!cancelButton) return;
-  const reason = prompt(`Enter the compulsory cancellation reason for ${cancelButton.dataset.id}:`)?.trim();
-  if (!reason) return showToast("The order was not cancelled. A cancellation reason is compulsory.", true);
-  if (!confirm(`Cancel ${cancelButton.dataset.id}? It will remain in the audit record and cannot be received.`)) return;
-  cancelButton.disabled = true;
-  try { await api(`/records/${encodeURIComponent(cancelButton.dataset.id)}/cancel`, { method: "POST", body: JSON.stringify({ reason }) }); await loadRecords(); showToast(`Delivery ${cancelButton.dataset.id} cancelled.`); } catch (error) { showToast(error.message, true); } finally { cancelButton.disabled = false; }
+  state.cancelRecord = state.records.find(record => record.id === cancelButton.dataset.id);
+  $("#cancelDeliveryId").value = cancelButton.dataset.id;
+  $("#cancelReason").value = "";
+  $("#cancelConfirm").checked = false;
+  $("#cancelDialog").showModal();
+});
+
+$("#closeCancel").addEventListener("click", () => $("#cancelDialog").close());
+$("#cancelForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector("[type=submit]");
+  const id = $("#cancelDeliveryId").value;
+  button.disabled = true;
+  try {
+    await api(`/records/${encodeURIComponent(id)}/cancel`, { method: "POST", body: JSON.stringify({ reason: $("#cancelReason").value.trim() }) });
+    $("#cancelDialog").close(); state.cancelRecord = null; await loadRecords(); showToast(`Delivery ${id} cancelled and retained in Records.`);
+  } catch (error) { showToast(error.message, true); }
+  finally { button.disabled = false; }
 });
 
 function itemDisplayName(item) { return item.type === "BATCH" ? `${item.batchNumber || "No batch"}${item.size ? ` · ${item.size}` : ""}` : item.description || "Component"; }
@@ -561,7 +591,7 @@ function openRecordView(record) {
     </tbody></table></div></section>
     ${viewerQr}
     <section class="record-section"><h3>Receiving History (${attempts.length})</h3>${attempts.length ? `<p class="empty-note">The latest attempt is open. Select any earlier attempt to view its details.</p><div class="receiving-history-list">${attempts.slice().reverse().map((attempt, reverseIndex) => { const attemptNumber = attempts.length - reverseIndex; const resultText = escapeHtml((attempt.result || "—").replaceAll("_", " ")); return `<details class="receiving-attempt" ${reverseIndex === 0 ? "open" : ""}><summary><span>Attempt ${attemptNumber} · ${formatDate(attempt.checkedAt)}&nbsp;&nbsp;·&nbsp;&nbsp;${resultText}</span></summary><div class="receiving-attempt-body"><div class="record-table-wrap"><table class="details-table"><tbody><tr><th>Receiving PIC</th><td>${escapeHtml(attempt.receivedBy || "—")}</td><th>Entered By</th><td>${escapeHtml(attempt.checkedBy || "—")}</td></tr><tr><th>Condition</th><td>${escapeHtml(attempt.condition || "—")}</td><th>Remarks</th><td>${escapeHtml(attempt.remarks || "—")}</td></tr><tr><th>Items Received</th><td colspan="3">${receiptItemsHtml(attempt, record)}</td></tr></tbody></table></div></div></details>`; }).join("")}</div>` : `<p class="empty-note">No receiving attempt has been recorded.</p>`}</section>
-    <section class="record-section"><h3>Corrections (${corrections.length})</h3>${corrections.length ? `<div class="record-table-wrap"><table><thead><tr><th>Date & Time</th><th>Corrected By</th><th>Target</th><th>Field</th><th>Original</th><th>Corrected</th><th>Reason</th></tr></thead><tbody>${corrections.map(change => `<tr><td>${formatDate(change.correctedAt)}</td><td>${escapeHtml(change.correctedBy || "—")}</td><td>${escapeHtml(change.target || "—")}</td><td>${escapeHtml(correctionFieldLabels[change.field] || change.field || "—")}</td><td>${escapeHtml(change.oldValue ?? "—")}</td><td>${escapeHtml(change.newValue ?? "—")}</td><td>${escapeHtml(change.reason || "—")}</td></tr>`).join("")}</tbody></table></div>` : `<p class="empty-note">No corrections have been made.</p>`}</section>
+    <section class="record-section"><h3>Corrections (${corrections.length})</h3>${corrections.length ? `<div class="record-table-wrap"><table><thead><tr><th>Date & Time</th><th>Corrected By</th><th>Target</th><th>Field</th><th>Original</th><th>Corrected</th><th>Reason / Status</th></tr></thead><tbody>${corrections.map(change => `<tr><td>${formatDate(change.correctedAt)}</td><td>${escapeHtml(change.correctedBy || "—")}</td><td>${escapeHtml(change.target || "—")}</td><td>${escapeHtml(correctionFieldLabels[change.field] || change.field || "—")}</td><td>${escapeHtml(change.oldValue ?? "—")}</td><td>${escapeHtml(change.newValue ?? "—")}</td><td>${escapeHtml(change.reason || "—")}${change.statusBefore && change.statusAfter && change.statusBefore !== change.statusAfter ? `<br><strong>Status: ${escapeHtml(change.statusBefore.replaceAll("_", " "))} → ${escapeHtml(change.statusAfter.replaceAll("_", " "))}</strong>` : ""}</td></tr>`).join("")}</tbody></table></div>` : `<p class="empty-note">No corrections have been made.</p>`}</section>
     ${status === "CANCELLED" ? `<section class="record-section"><h3>Cancellation</h3><div class="reason-note"><strong>Cancelled by ${escapeHtml(record.cancelledBy || "—")}</strong><br>${formatDate(record.cancelledAt)}<br>${escapeHtml(record.cancellationReason || "No reason recorded")}</div></section>` : ""}`;
   $("#recordDialog").showModal();
 }
@@ -667,5 +697,6 @@ $("#exportCsv").addEventListener("click", () => {
 function formatDate(value) { return value ? new Intl.DateTimeFormat("en-MY", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—"; }
 function escapeHtml(value = "") { return String(value).replace(/[&<>"']/g, character => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" })[character]); }
 updateCurrentUser();
+if (config.token) resetInactivityTimer();
 if (!config.apiUrl || !config.token) setTimeout(showLogin, 350);
 else new URLSearchParams(location.search).get("delivery") ? switchView("receive") : loadDrafts();
