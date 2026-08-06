@@ -165,16 +165,19 @@ tbody tr:last-child td { border-bottom: 0; }
 .record-view .details-table th { width: 180px; text-align: left; }
 .record-view .empty-note { margin: 0; padding: 14px; color: var(--muted); background: #f5f8f7; border-radius: 10px; }
 .record-view .reason-note { padding: 13px; border-left: 4px solid var(--danger); background: #fff4f2; border-radius: 8px; }
-.size-entry { border: 1px solid var(--line); border-radius: 10px; padding: .65rem; display: grid; grid-template-columns: repeat(3, minmax(90px, 1fr)); gap: .6rem; }
+.size-entry { border: 0; padding: 0; display: grid; grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 1rem; }
 .size-entry legend { padding: 0 .35rem; font-weight: 700; }
 .size-entry label { margin: 0; }
+.size-entry small { display: block; margin-top: .4rem; color: var(--muted); font-weight: 600; }
+.stored-size { background: #eef3f1; color: #52615c; font-weight: 750; }
 .receiving-history-list { display: grid; gap: .65rem; }
 .receiving-attempt { border: 1px solid var(--line); border-radius: 10px; background: #fff; }
-.receiving-attempt summary { cursor: pointer; padding: .8rem 1rem; font-weight: 700; display: flex; justify-content: space-between; gap: 1rem; }
+.receiving-attempt summary { cursor: pointer; padding: .8rem 1rem; font-weight: 700; display: flex; justify-content: space-between; column-gap: 1.25rem; }
 .receiving-attempt-body { padding: 0 1rem 1rem; }
 .discrepancy-list { margin: .35rem 0 0; padding-left: 1.1rem; color: #9c2f24; }
 .viewer-qr { text-align: center; padding: 1rem; background: #f6f8f7; border-radius: 12px; }
 .viewer-qr img { max-width: 190px; height: auto; }
+.qr-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; margin-top: 1rem; }
 dialog { width: min(500px, calc(100% - 32px)); padding: 0; border: 0; border-radius: 18px; box-shadow: 0 30px 90px rgba(0,0,0,.3); }
 dialog::backdrop { background: rgba(13, 34, 28, .66); }
 dialog form { display: grid; gap: 18px; padding: 26px; }
@@ -203,7 +206,7 @@ dialog form { display: grid; gap: 18px; padding: 26px; }
   .items-heading button { width: 100%; }
   .expected-grid { grid-template-columns: 1fr 1fr; }
   .draft-bar, .form-actions { grid-template-columns: 1fr; }
-  .size-entry { grid-template-columns: 1fr; }
+  .size-entry, .qr-actions { grid-template-columns: 1fr; }
 }
 
 @media print {

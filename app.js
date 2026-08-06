@@ -1,4 +1,4 @@
-const state = { records: [], openDeliveries: [], selectedDelivery: null, drafts: [], editingDraftId: null, autoSaveTimer: null, autoSaveBusy: false, correctionRecord: null };
+const state = { records: [], openDeliveries: [], selectedDelivery: null, drafts: [], editingDraftId: null, autoSaveTimer: null, autoSaveBusy: false, correctionRecord: null, currentQrDataUrl: "", currentQrId: "" };
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const DEFAULT_API_URL = "https://factory-movement-api.eugenelim831-1b3.workers.dev";
@@ -23,13 +23,13 @@ function formatBatchDigits(value) {
 function batchIsValid(value) { return /^\d{2}\/\d+$/.test(String(value || "")); }
 function splitSize(value) {
   const match = String(value || "").match(/^0\.(\d+)\*(\d+)\*(\d+)$/);
-  return match ? { thickness: match[1], length: match[2], width: match[3] } : { thickness: "", length: "", width: "" };
+  return match ? { thickness: match[1], width: match[2], length: match[3] } : { thickness: "", width: "", length: "" };
 }
 function composeSize(card) {
   const thickness = card.querySelector(".size-thickness")?.value.replace(/\D/g, "") || "";
-  const length = card.querySelector(".size-length")?.value || "";
   const width = card.querySelector(".size-width")?.value || "";
-  const value = thickness && length && width ? `0.${thickness}*${length}*${width}` : "";
+  const length = card.querySelector(".size-length")?.value || "";
+  const value = thickness && width && length ? `0.${thickness}*${width}*${length}` : "";
   if (card.querySelector(".item-size")) card.querySelector(".item-size").value = value;
   return value;
 }
@@ -392,14 +392,14 @@ function renderReceiveItems(record) {
       <div class="form-grid check-fields">
         <label>Quantity Received This Time (${escapeHtml(item.unit)})<input class="actual-quantity" type="number" inputmode="numeric" min="0" step="1" value="${complete ? 0 : outstanding}" ${complete ? "readonly" : "required"}></label>
         ${item.piecesPerUnit ? `<label>Actual pieces per bag<input class="actual-per-unit" type="number" inputmode="numeric" min="0" step="1" value="${item.piecesPerUnit}" ${complete ? "readonly" : "required"}></label>` : ""}
-        ${item.type === "BATCH" ? (() => { const size = splitSize(item.size); return `<label>Batch Number Received<input class="actual-batch" inputmode="numeric" value="${escapeHtml(item.batchNumber)}" ${complete ? "readonly" : "required"}></label><fieldset class="size-entry"><legend>Size Received</legend><label>Thickness<input class="actual-thickness" inputmode="numeric" value="${size.thickness}" ${complete ? "readonly" : "required"}></label><label>Length (mm)<input class="actual-length" type="number" inputmode="numeric" min="1" step="1" value="${size.length}" ${complete ? "readonly" : "required"}></label><label>Width (mm)<input class="actual-width" type="number" inputmode="numeric" min="1" step="1" value="${size.width}" ${complete ? "readonly" : "required"}></label></fieldset>`; })() : ""}
+        ${item.type === "BATCH" ? (() => { const size = splitSize(item.size); return `<label>Batch Number Received<input class="actual-batch" inputmode="numeric" value="${escapeHtml(item.batchNumber)}" ${complete ? "readonly" : "required"}></label><fieldset class="size-entry"><legend>Size Received</legend><label>Thickness<input class="actual-thickness" inputmode="numeric" value="${size.thickness}" ${complete ? "readonly" : "required"}><small>Enter 23 for 0.23 mm</small></label><label>Width (mm)<input class="actual-width" type="number" inputmode="numeric" min="1" step="1" value="${size.width}" ${complete ? "readonly" : "required"}></label><label>Length (mm)<input class="actual-length" type="number" inputmode="numeric" min="1" step="1" value="${size.length}" ${complete ? "readonly" : "required"}></label><label>Stored Dimensions<input class="actual-stored-size stored-size" value="${escapeHtml(item.size)}" readonly></label></fieldset>`; })() : ""}
         <fieldset><legend>Additional Issues (select all that apply)</legend><label><input class="additional-issue" type="checkbox" value="Wrong Item" ${complete ? "disabled" : ""}> Wrong Item</label><label><input class="additional-issue" type="checkbox" value="Damaged" ${complete ? "disabled" : ""}> Damaged</label><label><input class="additional-issue" type="checkbox" value="Packaging Broken" ${complete ? "disabled" : ""}> Packaging Broken</label><label><input class="additional-issue" type="checkbox" value="Other" ${complete ? "disabled" : ""}> Other</label></fieldset>
       </div>
       <div class="match-result" aria-live="polite"></div><div class="detected-discrepancies"></div>
     </article>`;
   }).join("");
   $$("#receiveItems .actual-batch").forEach(input => input.addEventListener("input", () => { input.value = formatBatchDigits(input.value); }));
-  $$("#receiveItems .actual-thickness, #receiveItems .actual-length, #receiveItems .actual-width").forEach(input => input.addEventListener("input", () => { input.value = input.value.replace(/\D/g, ""); }));
+  $$("#receiveItems .actual-thickness, #receiveItems .actual-length, #receiveItems .actual-width").forEach(input => input.addEventListener("input", () => { input.value = input.value.replace(/\D/g, ""); const card = input.closest(".receive-card"); const thickness = card.querySelector(".actual-thickness").value; const width = card.querySelector(".actual-width").value; const length = card.querySelector(".actual-length").value; card.querySelector(".actual-stored-size").value = thickness && width && length ? `0.${thickness}*${width}*${length}` : ""; }));
   $$("#receiveItems input, #receiveItems select").forEach(input => input.addEventListener("input", updateReceiveMatches));
   updateReceiveMatches();
 }
@@ -422,7 +422,7 @@ function collectReceivedItems() {
     const priorQuantity = Number(card.dataset.prior || 0);
     const cumulativeQuantity = priorQuantity + quantityReceived;
     const actualBatchNumber = card.querySelector(".actual-batch")?.value || "";
-    const actualSize = item.type === "BATCH" ? `0.${card.querySelector(".actual-thickness")?.value || ""}*${card.querySelector(".actual-length")?.value || ""}*${card.querySelector(".actual-width")?.value || ""}` : "";
+    const actualSize = item.type === "BATCH" ? `0.${card.querySelector(".actual-thickness")?.value || ""}*${card.querySelector(".actual-width")?.value || ""}*${card.querySelector(".actual-length")?.value || ""}` : "";
     const discrepancies = [];
     if (!present && priorQuantity < Number(item.quantity)) discrepancies.push("Item Missing");
     if (cumulativeQuantity < Number(item.quantity)) discrepancies.push("Quantity Short");
@@ -519,7 +519,7 @@ function openRecordView(record) {
   let viewerQr = "";
   if (["IN_TRANSIT", "INCOMPLETE"].includes(status)) {
     const url = deliveryQrUrl(record.id); const qr = qrcode(0, "M"); qr.addData(url); qr.make();
-    viewerQr = `<section class="record-section"><h3>Receiving QR Code</h3><div class="viewer-qr"><p>Scan to open this delivery on the Receiving tab.</p>${qr.createImgTag(5, 6)}</div></section>`;
+    viewerQr = `<section class="record-section"><h3>Receiving QR Code</h3><div class="viewer-qr"><p>Scan to open this delivery on the Receiving tab.</p>${qr.createImgTag(5, 6)}<br><button class="primary open-share-qr" data-id="${escapeHtml(record.id)}" type="button">Share or Save QR Code</button></div></section>`;
   }
   $("#recordDialogTitle").textContent = record.id;
   $("#recordView").className = "record-view";
@@ -535,12 +535,13 @@ function openRecordView(record) {
       ${items.map((item, index) => { const check = received.get(item.itemId) || {}; const receivedQuantity = check.cumulativeQuantity ?? check.quantityReceived; return `<tr><td>${index + 1}</td><td>${item.type === "BATCH" ? "Tinplate Batch" : "Component"}</td><td>${item.type === "BATCH" ? `${escapeHtml(item.batchNumber)}<br>${escapeHtml(item.size)}` : "—"}</td><td>${escapeHtml(item.description)}</td><td>${item.quantity} ${escapeHtml(item.unit)}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} pieces` : ""}</td><td>${receivedQuantity == null ? "—" : `${receivedQuantity} ${escapeHtml(item.unit)}`}</td><td>${check.matched ? "Complete" : status === "RECEIVED" ? "Complete" : "Outstanding"}</td></tr>`; }).join("")}
     </tbody></table></div></section>
     ${viewerQr}
-    <section class="record-section"><h3>Receiving History (${attempts.length})</h3>${attempts.length ? `<p class="empty-note">The latest attempt is open. Select any earlier attempt to view its details.</p><div class="receiving-history-list">${attempts.slice().reverse().map((attempt, reverseIndex) => { const attemptNumber = attempts.length - reverseIndex; const issues = (attempt.items || []).flatMap(item => item.discrepancies?.length ? item.discrepancies : item.discrepancyReason ? [item.discrepancyReason] : []); return `<details class="receiving-attempt" ${reverseIndex === 0 ? "open" : ""}><summary><span>Attempt ${attemptNumber} · ${formatDate(attempt.checkedAt)}</span><span>${escapeHtml((attempt.result || "—").replaceAll("_", " "))}</span></summary><div class="receiving-attempt-body"><div class="record-table-wrap"><table class="details-table"><tbody><tr><th>Receiving PIC</th><td>${escapeHtml(attempt.receivedBy || "—")}</td><th>Entered By</th><td>${escapeHtml(attempt.checkedBy || "—")}</td></tr><tr><th>Condition</th><td>${escapeHtml(attempt.condition || "—")}</td><th>Remarks</th><td>${escapeHtml(attempt.remarks || "—")}</td></tr><tr><th>Items Received</th><td colspan="3">${escapeHtml(receiptItemSummary(attempt, record))}</td></tr><tr><th>All Discrepancies</th><td colspan="3">${issues.length ? `<ul class="discrepancy-list">${issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>` : "None"}</td></tr></tbody></table></div></div></details>`; }).join("")}</div>` : `<p class="empty-note">No receiving attempt has been recorded.</p>`}</section>
+    <section class="record-section"><h3>Receiving History (${attempts.length})</h3>${attempts.length ? `<p class="empty-note">The latest attempt is open. Select any earlier attempt to view its details.</p><div class="receiving-history-list">${attempts.slice().reverse().map((attempt, reverseIndex) => { const attemptNumber = attempts.length - reverseIndex; const issues = (attempt.items || []).flatMap(item => item.discrepancies?.length ? item.discrepancies : item.discrepancyReason ? [item.discrepancyReason] : []); const resultText = escapeHtml((attempt.result || "—").replaceAll("_", " ")); return `<details class="receiving-attempt" ${reverseIndex === 0 ? "open" : ""}><summary><span>Attempt ${attemptNumber} · ${formatDate(attempt.checkedAt)}&nbsp;&nbsp;·&nbsp;&nbsp;${resultText}</span></summary><div class="receiving-attempt-body"><div class="record-table-wrap"><table class="details-table"><tbody><tr><th>Receiving PIC</th><td>${escapeHtml(attempt.receivedBy || "—")}</td><th>Entered By</th><td>${escapeHtml(attempt.checkedBy || "—")}</td></tr><tr><th>Condition</th><td>${escapeHtml(attempt.condition || "—")}</td><th>Remarks</th><td>${escapeHtml(attempt.remarks || "—")}</td></tr><tr><th>Items Received</th><td colspan="3">${escapeHtml(receiptItemSummary(attempt, record))}</td></tr><tr><th>All Discrepancies</th><td colspan="3">${issues.length ? `<ul class="discrepancy-list">${issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>` : "None"}</td></tr></tbody></table></div></div></details>`; }).join("")}</div>` : `<p class="empty-note">No receiving attempt has been recorded.</p>`}</section>
     <section class="record-section"><h3>Corrections (${corrections.length})</h3>${corrections.length ? `<div class="record-table-wrap"><table><thead><tr><th>Date & Time</th><th>Corrected By</th><th>Target</th><th>Field</th><th>Original</th><th>Corrected</th><th>Reason</th></tr></thead><tbody>${corrections.map(change => `<tr><td>${formatDate(change.correctedAt)}</td><td>${escapeHtml(change.correctedBy || "—")}</td><td>${escapeHtml(change.target || "—")}</td><td>${escapeHtml(correctionFieldLabels[change.field] || change.field || "—")}</td><td>${escapeHtml(change.oldValue ?? "—")}</td><td>${escapeHtml(change.newValue ?? "—")}</td><td>${escapeHtml(change.reason || "—")}</td></tr>`).join("")}</tbody></table></div>` : `<p class="empty-note">No corrections have been made.</p>`}</section>
     ${status === "CANCELLED" ? `<section class="record-section"><h3>Cancellation</h3><div class="reason-note"><strong>Cancelled by ${escapeHtml(record.cancelledBy || "—")}</strong><br>${formatDate(record.cancelledAt)}<br>${escapeHtml(record.cancellationReason || "No reason recorded")}</div></section>` : ""}`;
   $("#recordDialog").showModal();
 }
 $("#closeRecord").addEventListener("click", () => $("#recordDialog").close());
+$("#recordView").addEventListener("click", event => { const button = event.target.closest(".open-share-qr"); if (button) { $("#recordDialog").close(); showQr(button.dataset.id); } });
 
 const deliveryCorrectionFields = ["direction","driverName","vehicleNumber","releasedBy","purpose","remarks"];
 const itemCorrectionFields = ["batchNumber","size","description","quantity","unit","piecesPerUnit"];
@@ -585,8 +586,8 @@ function updateCorrectionValueControl() {
   } else if (field === "batchNumber") {
     control = document.createElement("input"); control.type = "text"; control.inputMode = "numeric"; control.pattern = "[0-9/]+"; control.placeholder = "Enter digits only"; control.value = formatBatchDigits(current); control.addEventListener("input", () => control.value = formatBatchDigits(control.value));
   } else if (field === "size") {
-    const parts = splitSize(current); control = document.createElement("fieldset"); control.className = "size-entry"; control.innerHTML = `<legend>Corrected Size</legend><label>Thickness<input class="correction-size-part" data-part="thickness" inputmode="numeric" value="${parts.thickness}" required></label><label>Length (mm)<input class="correction-size-part" data-part="length" type="number" inputmode="numeric" min="1" step="1" value="${parts.length}" required></label><label>Width (mm)<input class="correction-size-part" data-part="width" type="number" inputmode="numeric" min="1" step="1" value="${parts.width}" required></label><input id="correctionValue" type="hidden" value="${escapeHtml(current)}">`;
-    control.querySelectorAll(".correction-size-part").forEach(input => input.addEventListener("input", () => { input.value = input.value.replace(/\D/g, ""); const values = Object.fromEntries([...control.querySelectorAll(".correction-size-part")].map(part => [part.dataset.part, part.value])); control.querySelector("#correctionValue").value = `0.${values.thickness}*${values.length}*${values.width}`; }));
+    const parts = splitSize(current); control = document.createElement("fieldset"); control.className = "size-entry"; control.innerHTML = `<legend>Corrected Size</legend><label>Thickness<input class="correction-size-part" data-part="thickness" inputmode="numeric" value="${parts.thickness}" required><small>Enter 23 for 0.23 mm</small></label><label>Width (mm)<input class="correction-size-part" data-part="width" type="number" inputmode="numeric" min="1" step="1" value="${parts.width}" required></label><label>Length (mm)<input class="correction-size-part" data-part="length" type="number" inputmode="numeric" min="1" step="1" value="${parts.length}" required></label><label>Stored Dimensions<input class="correction-stored-size stored-size" value="${escapeHtml(current)}" readonly></label><input id="correctionValue" type="hidden" value="${escapeHtml(current)}">`;
+    control.querySelectorAll(".correction-size-part").forEach(input => input.addEventListener("input", () => { input.value = input.value.replace(/\D/g, ""); const values = Object.fromEntries([...control.querySelectorAll(".correction-size-part")].map(part => [part.dataset.part, part.value])); const stored = `0.${values.thickness}*${values.width}*${values.length}`; control.querySelector("#correctionValue").value = stored; control.querySelector(".correction-stored-size").value = stored; }));
   } else {
     control = document.createElement("input"); control.type = "text"; control.maxLength = 500; control.value = current;
   }
@@ -603,10 +604,23 @@ $("#correctionForm").addEventListener("submit", async event => {
 
 function showQr(id) {
   const qr = qrcode(0, "M"); qr.addData(deliveryQrUrl(id)); qr.make();
-  $("#qrDeliveryId").textContent = id; $("#qrCode").innerHTML = qr.createImgTag(6, 8); $("#qrDialog").showModal();
+  $("#qrDeliveryId").textContent = id; $("#qrCode").innerHTML = qr.createImgTag(6, 8); state.currentQrId = id; state.currentQrDataUrl = $("#qrCode img").src; $("#qrDialog").showModal();
 }
 function deliveryQrUrl(id) { const url = new URL(location.href); url.search = ""; url.hash = ""; url.searchParams.set("delivery", id); return url.toString(); }
+async function qrPngBlob() { const image = new Image(); image.src = state.currentQrDataUrl; await image.decode(); const canvas = document.createElement("canvas"); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight; canvas.getContext("2d").drawImage(image, 0, 0); return new Promise(resolve => canvas.toBlob(resolve, "image/png")); }
+async function qrFile() { const blob = await qrPngBlob(); return new File([blob], `${state.currentQrId}-QR.png`, { type: "image/png" }); }
+async function saveQrToPhone() { const blob = await qrPngBlob(); const objectUrl = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = objectUrl; link.download = `${state.currentQrId}-QR.png`; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(objectUrl), 1000); showToast("QR code saved. Check your phone's Downloads or Files folder."); }
+async function shareQrCode() {
+  try {
+    const file = await qrFile();
+    if (navigator.share && navigator.canShare?.({ files: [file] })) { await navigator.share({ title: `Delivery ${state.currentQrId}`, text: `Receiving QR code for delivery ${state.currentQrId}`, files: [file] }); return; }
+    if (navigator.share) { await navigator.share({ title: `Delivery ${state.currentQrId}`, text: `Open delivery ${state.currentQrId} for receiving`, url: deliveryQrUrl(state.currentQrId) }); return; }
+    saveQrToPhone();
+  } catch (error) { if (error.name !== "AbortError") { saveQrToPhone(); showToast("Sharing is unavailable on this browser, so the QR image was downloaded instead."); } }
+}
 $("#closeQr").addEventListener("click", () => $("#qrDialog").close());
+$("#shareQr").addEventListener("click", shareQrCode);
+$("#saveQr").addEventListener("click", saveQrToPhone);
 $("#printQr").addEventListener("click", () => window.print());
 $("#refreshRecords").addEventListener("click", loadRecords);
 $("#recordSearch").addEventListener("input", renderRecords);

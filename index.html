@@ -157,7 +157,7 @@
       <div class="form-grid item-fields">
         <label>Item type<select class="item-type" required><option value="BATCH">Tinplate batch</option><option value="COMPONENT">Component</option></select></label>
         <label class="batch-field">Batch Number<input class="batch-number" placeholder="e.g. enter 123456 for 12/3456" inputmode="numeric" pattern="[0-9/]+" autocomplete="off"></label>
-        <fieldset class="batch-field size-entry"><legend>Tinplate Size</legend><label>Thickness<input class="size-thickness" type="text" inputmode="numeric" pattern="[0-9]+" placeholder="23 → 0.23"></label><label>Length (mm)<input class="size-length" type="number" inputmode="numeric" min="1" step="1" placeholder="950"></label><label>Width (mm)<input class="size-width" type="number" inputmode="numeric" min="1" step="1" placeholder="740"></label><input class="item-size" type="hidden"></fieldset>
+        <fieldset class="batch-field size-entry"><legend>Tinplate Size</legend><label>Thickness<input class="size-thickness" type="text" inputmode="numeric" pattern="[0-9]+" placeholder="23"><small>Enter 23 for 0.23 mm</small></label><label>Width (mm)<input class="size-width" type="number" inputmode="numeric" min="1" step="1" placeholder="960"></label><label>Length (mm)<input class="size-length" type="number" inputmode="numeric" min="1" step="1" placeholder="905"></label><label>Stored Dimensions<input class="item-size stored-size" type="text" readonly placeholder="0.23*960*905"></label></fieldset>
         <label>Item description<input class="item-description" required placeholder="e.g. Printed tinplate or 603D lids"></label>
         <label>Quantity <span class="quantity-unit-hint"></span><input class="item-quantity" type="number" inputmode="numeric" min="1" step="1" required></label>
         <label>Unit<select class="item-unit" required><option value="pieces">Pieces</option><option value="blanks">Blanks</option><option value="bags">Bags</option><option value="sets">Sets</option><option value="pallets">Pallets</option><option value="sheets">Sheets</option></select></label>
@@ -186,7 +186,7 @@
     <div class="dialog-heading"><h2>Delivery Dispatched</h2><button id="closeQr" class="icon-button" type="button" aria-label="Close">×</button></div>
     <p>Attach or show this QR code with the delivery. Scanning it opens the correct Delivery ID.</p>
     <strong id="qrDeliveryId" class="large-id"></strong><div id="qrCode" class="qr-code"></div>
-    <button id="printQr" class="primary" type="button">Print QR Slip</button>
+    <div class="qr-actions"><button id="shareQr" class="primary" type="button">Share QR Code</button><button id="saveQr" class="secondary" type="button">Save QR to Phone</button><button id="printQr" class="secondary" type="button">Print QR Slip</button></div>
   </div></dialog>
 
   <dialog id="correctionDialog"><form id="correctionForm">
@@ -206,7 +206,7 @@
   </div></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="qrcode.js?v=16"></script>
-  <script src="app.js?v=16"></script>
+  <script src="qrcode.js?v=17"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>
