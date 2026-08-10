@@ -22,6 +22,10 @@ function formatBatchDigits(value) {
 }
 function batchIsValid(value) { return /^\d{2}\/\d+$/.test(String(value || "")); }
 function sizeIsValid(value) { return /^0\.[1-9]\d*\*[1-9]\d*\*[1-9]\d*$/.test(String(value || "")); }
+function displayStatus(value) {
+  return ({ DRAFT: "Draft", IN_TRANSIT: "In Transit", INCOMPLETE: "Incomplete", RECEIVED: "Received", RECEIVED_WITH_DISCREPANCY: "Received With Discrepancy", CANCELLED: "Cancelled", ABANDONED: "Abandoned" })[normalizedStatus(value)] || String(value || "—").replaceAll("_", " ");
+}
+function displayUnit(value) { return value ? String(value).charAt(0).toUpperCase() + String(value).slice(1) : ""; }
 function splitSize(value) {
   const match = String(value || "").match(/^0\.(\d+)\*(\d+)\*(\d+)$/);
   return match ? { thickness: match[1], width: match[2], length: match[3] } : { thickness: "", width: "", length: "" };
@@ -269,7 +273,7 @@ async function loadDrafts(selectedId = state.editingDraftId) {
   try {
     const records = await api("/records");
     state.drafts = records.filter(record => record.status === "DRAFT");
-    $("#draftId").innerHTML = `<option value="">New unsaved delivery</option>` + state.drafts.map(record => `<option value="${escapeHtml(record.id)}">${escapeHtml(record.id)} — ${escapeHtml(record.direction || "Direction not set")} — ${record.items?.length || 0} item(s)</option>`).join("");
+    $("#draftId").innerHTML = `<option value="">New Unsaved Delivery</option>` + state.drafts.map(record => `<option value="${escapeHtml(record.id)}">${escapeHtml(record.id)} — ${escapeHtml(record.direction || "Direction Not Set")} — ${record.items?.length || 0} Item(s)</option>`).join("");
     if (selectedId && state.drafts.some(record => record.id === selectedId)) $("#draftId").value = selectedId;
   } catch (error) { showToast(error.message, true); }
 }
@@ -365,22 +369,22 @@ function normalizedItems(record) {
 
 async function loadOpenDeliveries() {
   const select = $("#deliveryId");
-  select.innerHTML = `<option value="">Loading open deliveries…</option>`;
+  select.innerHTML = `<option value="">Loading Open Deliveries…</option>`;
   try {
     const records = await api("/records");
     state.openDeliveries = records.filter(record => ["IN_TRANSIT", "INCOMPLETE"].includes(normalizedStatus(record.status)));
-    select.innerHTML = `<option value="">Select Delivery ID</option>` + state.openDeliveries.map(record => `<option value="${escapeHtml(record.id)}">${escapeHtml(record.id)} — ${escapeHtml(record.direction || "Legacy transfer")} — ${normalizedItems(record).length} item(s) — ${normalizedStatus(record.status).replaceAll("_", " ")}</option>`).join("");
-    if (!state.openDeliveries.length) select.innerHTML = `<option value="">No open deliveries</option>`;
+    select.innerHTML = `<option value="">Select Delivery ID</option>` + state.openDeliveries.map(record => `<option value="${escapeHtml(record.id)}">${escapeHtml(record.id)} — ${escapeHtml(record.direction || "Legacy Transfer")} — ${normalizedItems(record).length} Item(s) — ${displayStatus(record.status)}</option>`).join("");
+    if (!state.openDeliveries.length) select.innerHTML = `<option value="">No Open Deliveries</option>`;
     const requested = new URLSearchParams(location.search).get("delivery");
     if (requested) {
       const requestedRecord = records.find(record => record.id === requested);
       if (state.openDeliveries.some(record => record.id === requested)) { select.value = requested; select.dispatchEvent(new Event("change")); }
       else if (requestedRecord && ["RECEIVED", "RECEIVED_WITH_DISCREPANCY"].includes(normalizedStatus(requestedRecord.status))) alert(`Delivery ${requested} has already been received and completed${normalizedStatus(requestedRecord.status) === "RECEIVED_WITH_DISCREPANCY" ? " with a recorded discrepancy" : ""}.`);
-      else if (requestedRecord) alert(`Delivery ${requested} is ${normalizedStatus(requestedRecord.status).replaceAll("_", " ")} and cannot be received.`);
+      else if (requestedRecord) alert(`Delivery ${requested} is ${displayStatus(requestedRecord.status)} and cannot be received.`);
       else alert(`Delivery ${requested} was not found.`);
       history.replaceState({}, "", location.pathname);
     }
-  } catch (error) { select.innerHTML = `<option value="">Unable to load deliveries</option>`; showToast(error.message, true); }
+  } catch (error) { select.innerHTML = `<option value="">Unable to Load Deliveries</option>`; showToast(error.message, true); }
 }
 
 $("#refreshDeliveries").addEventListener("click", loadOpenDeliveries);
@@ -391,7 +395,7 @@ $("#deliveryId").addEventListener("change", async event => {
     const record = await api(`/records/${encodeURIComponent(id)}`);
     state.selectedDelivery = record;
     $("#deliverySummary").classList.remove("empty");
-    $("#deliverySummary").innerHTML = `<dl><div><dt>Direction</dt><dd>${escapeHtml(record.direction || "Legacy transfer")}</dd></div><div><dt>Driver</dt><dd>${escapeHtml(record.driverName)}</dd></div><div><dt>Vehicle</dt><dd>${escapeHtml(record.vehicleNumber || "—")}</dd></div><div><dt>Released by</dt><dd>${escapeHtml(record.releasedBy || "—")}</dd></div><div><dt>Dispatched</dt><dd>${formatDate(record.timeOut)}</dd></div><div><dt>Status</dt><dd>${normalizedStatus(record.status).replaceAll("_", " ")}</dd></div></dl>`;
+    $("#deliverySummary").innerHTML = `<dl><div><dt>Direction</dt><dd>${escapeHtml(record.direction || "Legacy Transfer")}</dd></div><div><dt>Driver</dt><dd>${escapeHtml(record.driverName)}</dd></div><div><dt>Vehicle</dt><dd>${escapeHtml(record.vehicleNumber || "—")}</dd></div><div><dt>Released By</dt><dd>${escapeHtml(record.releasedBy || "—")}</dd></div><div><dt>Dispatched</dt><dd>${formatDate(record.timeOut)}</dd></div><div><dt>Status</dt><dd>${displayStatus(record.status)}</dd></div></dl>`;
     renderReceiveItems(record);
   } catch (error) { showToast(error.message, true); }
 });
@@ -405,15 +409,15 @@ function renderReceiveItems(record) {
     return `<article class="receive-card${complete ? " item-complete" : ""}" data-item-id="${escapeHtml(item.itemId)}" data-prior="${priorQuantity}" data-expected="${Number(item.quantity)}">
       <div class="receive-card-title"><div><span>Item ${index + 1}</span><strong>${escapeHtml(item.description)}</strong></div><label class="present-check"><input class="item-present" type="checkbox" ${complete ? "checked disabled" : ""}> ${complete ? "Complete" : "Item present"}</label></div>
       <div class="expected-grid">
-        <div><span>Type</span><strong>${item.type === "BATCH" ? "Tinplate batch" : "Component"}</strong></div>
+        <div><span>Type</span><strong>${item.type === "BATCH" ? "Tinplate Batch" : "Component"}</strong></div>
         ${item.type === "BATCH" ? `<div><span>Batch</span><strong>${escapeHtml(item.batchNumber)}</strong></div><div><span>Size</span><strong>${escapeHtml(item.size)}</strong></div>` : ""}
         <div><span>Expected</span><strong>${item.quantity} ${escapeHtml(item.unit)}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} pieces` : ""}</strong></div><div><span>Previously Received</span><strong>${priorQuantity} ${escapeHtml(item.unit)}</strong></div><div><span>Outstanding</span><strong>${outstanding} ${escapeHtml(item.unit)}</strong></div>
       </div>
       <div class="form-grid check-fields">
-        <label>Quantity Received This Time (${escapeHtml(item.unit)})<input class="actual-quantity" type="number" inputmode="numeric" min="0" step="1" value="0" ${complete ? "readonly" : "required"}></label>
-        ${item.piecesPerUnit ? `<label>Actual pieces per bag<input class="actual-per-unit" type="number" inputmode="numeric" min="0" step="1" value="${item.piecesPerUnit}" ${complete ? "readonly" : "required"}></label>` : ""}
+        <label>Quantity Received This Time (${escapeHtml(displayUnit(item.unit))})<input class="actual-quantity" type="number" inputmode="numeric" min="0" step="1" value="0" ${complete ? "readonly" : "required"}></label>
+        ${item.piecesPerUnit ? `<label>Actual Pieces Per Bag<input class="actual-per-unit" type="number" inputmode="numeric" min="0" step="1" value="${item.piecesPerUnit}" ${complete ? "readonly" : "required"}></label>` : ""}
         ${item.type === "BATCH" ? (() => { const size = splitSize(item.size); return `<label>Batch Number Received<input class="actual-batch" inputmode="numeric" value="${escapeHtml(item.batchNumber)}" ${complete ? "readonly" : "required"}></label><fieldset class="size-entry"><legend>Size Received</legend><label>Thickness<input class="actual-thickness" inputmode="numeric" value="${size.thickness}" ${complete ? "readonly" : "required"}><small>Enter 23 for 0.23 mm</small></label><label>Width (mm)<input class="actual-width" type="number" inputmode="numeric" min="1" step="1" value="${size.width}" ${complete ? "readonly" : "required"}></label><label>Length (mm)<input class="actual-length" type="number" inputmode="numeric" min="1" step="1" value="${size.length}" ${complete ? "readonly" : "required"}></label><label>Stored Dimensions<input class="actual-stored-size stored-size" value="${escapeHtml(item.size)}" readonly></label></fieldset>`; })() : ""}
-        <div class="additional-issues"><strong>Additional Issues (select all that apply)</strong><div class="issue-options"><label class="issue-option"><input class="additional-issue" type="checkbox" value="Wrong Item" ${complete ? "disabled" : ""}><span>Wrong Item</span></label><label class="issue-option"><input class="additional-issue" type="checkbox" value="Damaged" ${complete ? "disabled" : ""}><span>Damaged</span></label><label class="issue-option"><input class="additional-issue" type="checkbox" value="Packaging Broken" ${complete ? "disabled" : ""}><span>Packaging Broken</span></label></div></div>
+        <div class="additional-issues"><strong>Additional Issues (Select All That Apply)</strong><div class="issue-options"><label class="issue-option"><input class="additional-issue" type="checkbox" value="Wrong Item" ${complete ? "disabled" : ""}><span>Wrong Item</span></label><label class="issue-option"><input class="additional-issue" type="checkbox" value="Damaged" ${complete ? "disabled" : ""}><span>Damaged</span></label><label class="issue-option"><input class="additional-issue" type="checkbox" value="Packaging Broken" ${complete ? "disabled" : ""}><span>Packaging Broken</span></label></div></div>
       </div>
       <div class="match-result" aria-live="polite"></div><div class="detected-discrepancies"></div>
     </article>`;
@@ -503,7 +507,7 @@ $("#receiveForm").addEventListener("submit", async event => {
   const button = form.querySelector("[type=submit]"); button.disabled = true; button.textContent = "Saving…";
   try {
     const result = await api(`/records/${encodeURIComponent(state.selectedDelivery.id)}`, { method: "PATCH", body: JSON.stringify(data) });
-    showToast(`Delivery marked ${normalizedStatus(result.record.status).replaceAll("_", " ")}.`);
+    showToast(`Delivery marked ${displayStatus(result.record.status)}.`);
     form.reset(); $("#completeWithDiscrepancyBox").classList.add("hidden"); state.selectedDelivery = null; $("#deliverySummary").className = "record-summary empty"; $("#deliverySummary").textContent = "Select an open Delivery ID to view all items."; $("#receiveItems").innerHTML = ""; $("#receiveSignature").clearSignature(); await loadOpenDeliveries();
   } catch (error) { showToast(error.message, true); }
   finally { button.disabled = false; button.textContent = "Confirm Item Check"; }
@@ -519,7 +523,7 @@ function recordSearchText(record) { return [record.id, record.direction, record.
 function filteredRecords() { const term = $("#recordSearch").value.trim().toLowerCase(); const status = $("#statusFilter").value; return state.records.filter(record => (!term || recordSearchText(record).includes(term)) && (!status || normalizedStatus(record.status) === status)); }
 function renderRecords() {
   const records = filteredRecords();
-  $("#recordsBody").innerHTML = records.length ? records.map(record => `<tr><td>${escapeHtml(record.id)}</td><td>${escapeHtml(record.direction || "—")}</td><td>${normalizedItems(record).length}</td><td>${escapeHtml(record.driverName)}</td><td>${escapeHtml(record.vehicleNumber || "—")}</td><td>${escapeHtml(record.dispatchedBy || record.createdBy || "—")}</td><td>${escapeHtml(record.lastUpdatedBy || "—")}</td><td>${formatDate(record.timeOut)}</td><td>${record.timeReceived || record.timeIn ? formatDate(record.timeReceived || record.timeIn) : "—"}</td><td class="status-cell ${normalizedStatus(record.status)}">${normalizedStatus(record.status).replaceAll("_", " ")}</td><td><button class="primary view-record" data-id="${escapeHtml(record.id)}" type="button">View</button> <button class="secondary correct-record" data-id="${escapeHtml(record.id)}" type="button">Correct</button>${config.user === "Eugene" && normalizedStatus(record.status) === "IN_TRANSIT" ? ` <button class="secondary danger-button cancel-record" data-id="${escapeHtml(record.id)}" type="button">Cancel</button>` : ""}${normalizedStatus(record.status) === "CANCELLED" ? `<div class="audit-note">${escapeHtml(record.cancelledBy || "Eugene")} · ${formatDate(record.cancelledAt)}<br>${escapeHtml(record.cancellationReason || "No reason recorded")}</div>` : ""}</td></tr>`).join("") : `<tr><td colspan="11" class="empty-cell">No matching records.</td></tr>`;
+  $("#recordsBody").innerHTML = records.length ? records.map(record => `<tr><td>${escapeHtml(record.id)}</td><td>${escapeHtml(record.direction || "—")}</td><td>${normalizedItems(record).length}</td><td>${escapeHtml(record.driverName)}</td><td>${escapeHtml(record.vehicleNumber || "—")}</td><td>${escapeHtml(record.dispatchedBy || record.createdBy || "—")}</td><td>${escapeHtml(record.lastUpdatedBy || "—")}</td><td>${formatDate(record.timeOut)}</td><td>${record.timeReceived || record.timeIn ? formatDate(record.timeReceived || record.timeIn) : "—"}</td><td class="status-cell ${normalizedStatus(record.status)}">${displayStatus(record.status)}</td><td><button class="primary view-record" data-id="${escapeHtml(record.id)}" type="button">View</button> <button class="secondary correct-record" data-id="${escapeHtml(record.id)}" type="button">Correct</button>${config.user === "Eugene" && normalizedStatus(record.status) === "IN_TRANSIT" ? ` <button class="secondary danger-button cancel-record" data-id="${escapeHtml(record.id)}" type="button">Cancel</button>` : ""}${normalizedStatus(record.status) === "CANCELLED" ? `<div class="audit-note">${escapeHtml(record.cancelledBy || "Eugene")} · ${formatDate(record.cancelledAt)}<br>${escapeHtml(record.cancellationReason || "No Reason Recorded")}</div>` : ""}</td></tr>`).join("") : `<tr><td colspan="11" class="empty-cell">No Matching Records.</td></tr>`;
 }
 $("#recordsBody").addEventListener("click", async event => {
   const viewButton = event.target.closest(".view-record");
@@ -581,7 +585,7 @@ function openRecordView(record) {
   $("#recordDialogTitle").textContent = record.id;
   $("#recordView").className = "record-view";
   $("#recordView").innerHTML = `
-    <div class="record-view-head"><strong>${escapeHtml(record.direction || "Transfer direction not recorded")}</strong><span class="status-badge ${["RECEIVED", "RECEIVED_WITH_DISCREPANCY"].includes(status) ? "returned" : "out"}">${escapeHtml(status.replaceAll("_", " "))}</span></div>
+    <div class="record-view-head"><strong>${escapeHtml(record.direction || "Transfer Direction Not Recorded")}</strong><span class="status-badge ${["RECEIVED", "RECEIVED_WITH_DISCREPANCY"].includes(status) ? "returned" : "out"}">${displayStatus(status)}</span></div>
     <section class="record-section"><h3>Transfer Details</h3><div class="record-table-wrap"><table class="details-table"><tbody>
       <tr><th>Driver</th><td>${escapeHtml(record.driverName || "—")}</td><th>Vehicle</th><td>${escapeHtml(record.vehicleNumber || "—")}</td></tr>
       <tr><th>Purpose</th><td colspan="3">${escapeHtml(record.purpose || "—")}</td></tr>
@@ -589,12 +593,12 @@ function openRecordView(record) {
       <tr><th>Dispatched</th><td>${formatDate(record.timeOut)}</td><th>Dispatch Remarks</th><td>${escapeHtml(record.remarks || "—")}</td></tr>
     </tbody></table></div></section>
     <section class="record-section"><h3>Items (${items.length})</h3><div class="record-table-wrap"><table><thead><tr><th>#</th><th>Type</th><th>Batch / Size</th><th>Description</th><th>Expected</th><th>Received</th><th>Result</th></tr></thead><tbody>
-      ${items.map((item, index) => { const check = received.get(item.itemId) || {}; const receivedQuantity = check.cumulativeQuantity ?? check.quantityReceived; return `<tr><td>${index + 1}</td><td>${item.type === "BATCH" ? "Tinplate Batch" : "Component"}</td><td>${item.type === "BATCH" ? `${escapeHtml(item.batchNumber)}<br>${escapeHtml(item.size)}` : "—"}</td><td>${escapeHtml(item.description)}</td><td>${item.quantity} ${escapeHtml(item.unit)}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} pieces` : ""}</td><td>${receivedQuantity == null ? "—" : `${receivedQuantity} ${escapeHtml(item.unit)}`}</td><td>${check.matched ? "Complete" : status === "RECEIVED_WITH_DISCREPANCY" ? `<span class="discrepancy-text">Completed With Discrepancy</span>` : status === "RECEIVED" ? "Complete" : "Outstanding"}</td></tr>`; }).join("")}
+      ${items.map((item, index) => { const check = received.get(item.itemId) || {}; const receivedQuantity = check.cumulativeQuantity ?? check.quantityReceived; return `<tr><td>${index + 1}</td><td>${item.type === "BATCH" ? "Tinplate Batch" : "Component"}</td><td>${item.type === "BATCH" ? `${escapeHtml(item.batchNumber)}<br>${escapeHtml(item.size)}` : "—"}</td><td>${escapeHtml(item.description)}</td><td>${item.quantity} ${escapeHtml(displayUnit(item.unit))}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} Pieces` : ""}</td><td>${receivedQuantity == null ? "—" : `${receivedQuantity} ${escapeHtml(displayUnit(item.unit))}`}</td><td>${check.matched ? "Complete" : status === "RECEIVED_WITH_DISCREPANCY" ? `<span class="discrepancy-text">Completed With Discrepancy</span>` : status === "RECEIVED" ? "Complete" : "Outstanding"}</td></tr>`; }).join("")}
     </tbody></table></div></section>
     ${viewerQr}
-    <section class="record-section"><h3>Receiving History (${attempts.length})</h3>${attempts.length ? `<p class="empty-note">The latest attempt is open. Select any earlier attempt to view its details.</p><div class="receiving-history-list">${attempts.slice().reverse().map((attempt, reverseIndex) => { const attemptNumber = attempts.length - reverseIndex; const resultText = escapeHtml((attempt.result || "—").replaceAll("_", " ")); return `<details class="receiving-attempt" ${reverseIndex === 0 ? "open" : ""}><summary><span>Attempt ${attemptNumber} · ${formatDate(attempt.checkedAt)}&nbsp;&nbsp;·&nbsp;&nbsp;${resultText}</span></summary><div class="receiving-attempt-body"><div class="record-table-wrap"><table class="details-table"><tbody><tr><th>Receiving PIC</th><td>${escapeHtml(attempt.receivedBy || "—")}</td><th>Entered By</th><td>${escapeHtml(attempt.checkedBy || "—")}</td></tr><tr><th>Condition</th><td>${escapeHtml(attempt.condition || "—")}</td><th>Remarks</th><td>${escapeHtml(attempt.remarks || "—")}</td></tr><tr><th>Items Received</th><td colspan="3">${receiptItemsHtml(attempt, record)}</td></tr></tbody></table></div></div></details>`; }).join("")}</div>` : `<p class="empty-note">No receiving attempt has been recorded.</p>`}</section>
+    <section class="record-section"><h3>Receiving History (${attempts.length})</h3>${attempts.length ? `<p class="empty-note">The latest attempt is open. Select any earlier attempt to view its details.</p><div class="receiving-history-list">${attempts.slice().reverse().map((attempt, reverseIndex) => { const attemptNumber = attempts.length - reverseIndex; const resultText = displayStatus(attempt.result || "—"); return `<details class="receiving-attempt" ${reverseIndex === 0 ? "open" : ""}><summary><span>Attempt ${attemptNumber} · ${formatDate(attempt.checkedAt)}&nbsp;&nbsp;·&nbsp;&nbsp;${resultText}</span></summary><div class="receiving-attempt-body"><div class="record-table-wrap"><table class="details-table"><tbody><tr><th>Receiving PIC</th><td>${escapeHtml(attempt.receivedBy || "—")}</td><th>Entered By</th><td>${escapeHtml(attempt.checkedBy || "—")}</td></tr><tr><th>Condition</th><td>${escapeHtml(attempt.condition || "—")}</td><th>Remarks</th><td>${escapeHtml(attempt.remarks || "—")}</td></tr><tr><th>Items Received</th><td colspan="3">${receiptItemsHtml(attempt, record)}</td></tr></tbody></table></div></div></details>`; }).join("")}</div>` : `<p class="empty-note">No receiving attempt has been recorded.</p>`}</section>
     <section class="record-section"><h3>Corrections (${corrections.length})</h3>${corrections.length ? `<div class="record-table-wrap"><table><thead><tr><th>Date & Time</th><th>Corrected By</th><th>Target</th><th>Field</th><th>Original</th><th>Corrected</th><th>Reason / Status</th></tr></thead><tbody>${corrections.map(change => `<tr><td>${formatDate(change.correctedAt)}</td><td>${escapeHtml(change.correctedBy || "—")}</td><td>${escapeHtml(change.target || "—")}</td><td>${escapeHtml(correctionFieldLabels[change.field] || change.field || "—")}</td><td>${escapeHtml(change.oldValue ?? "—")}</td><td>${escapeHtml(change.newValue ?? "—")}</td><td>${escapeHtml(change.reason || "—")}${change.statusBefore && change.statusAfter && change.statusBefore !== change.statusAfter ? `<br><strong>Status: ${escapeHtml(change.statusBefore.replaceAll("_", " "))} → ${escapeHtml(change.statusAfter.replaceAll("_", " "))}</strong>` : ""}</td></tr>`).join("")}</tbody></table></div>` : `<p class="empty-note">No corrections have been made.</p>`}</section>
-    ${status === "CANCELLED" ? `<section class="record-section"><h3>Cancellation</h3><div class="reason-note"><strong>Cancelled by ${escapeHtml(record.cancelledBy || "—")}</strong><br>${formatDate(record.cancelledAt)}<br>${escapeHtml(record.cancellationReason || "No reason recorded")}</div></section>` : ""}`;
+    ${status === "CANCELLED" ? `<section class="record-section"><h3>Cancellation</h3><div class="reason-note"><strong>Cancelled By ${escapeHtml(record.cancelledBy || "—")}</strong><br>${formatDate(record.cancelledAt)}<br>${escapeHtml(record.cancellationReason || "No Reason Recorded")}</div></section>` : ""}`;
   $("#recordDialog").showModal();
 }
 $("#closeRecord").addEventListener("click", () => $("#recordDialog").close());
@@ -607,7 +611,7 @@ const correctionFieldLabels = { direction: "Direction", driverName: "Driver Name
 function openCorrection(record) {
   state.correctionRecord = record;
   $("#correctionDeliveryId").value = record.id;
-  $("#correctionTarget").innerHTML = `<option value="DELIVERY">Delivery details</option>` + normalizedItems(record).map((item, index) => `<option value="${escapeHtml(item.itemId)}">Item ${index + 1}: ${escapeHtml(item.description)}</option>`).join("");
+  $("#correctionTarget").innerHTML = `<option value="DELIVERY">Delivery Details</option>` + normalizedItems(record).map((item, index) => `<option value="${escapeHtml(item.itemId)}">Item ${index + 1}: ${escapeHtml(item.description)}</option>`).join("");
   updateCorrectionFields(); $("#correctionReason").value = ""; $("#correctionDialog").showModal();
 }
 function updateCorrectionFields() {
@@ -629,10 +633,22 @@ function correctionCurrentValue() {
   const source = target === "DELIVERY" ? state.correctionRecord : normalizedItems(state.correctionRecord).find(item => item.itemId === target);
   return source?.[$("#correctionField").value] ?? "";
 }
+function updateCorrectionExistingValue(field, current) {
+  const target = $("#correctionTarget").value;
+  const items = normalizedItems(state.correctionRecord);
+  const itemIndex = items.findIndex(item => item.itemId === target);
+  const item = itemIndex >= 0 ? items[itemIndex] : null;
+  const display = field === "unit" ? displayUnit(current) : current === "" || current == null ? "No Value Recorded" : String(current);
+  $("#correctionExistingValue").textContent = display;
+  $("#correctionExistingContext").textContent = target === "DELIVERY"
+    ? `Delivery Details — ${correctionFieldLabels[field]}`
+    : `Item ${itemIndex + 1}: ${item?.description || "Unnamed Item"} — ${correctionFieldLabels[field]}`;
+}
 function updateCorrectionValueControl() {
   const field = $("#correctionField").value;
   const current = correctionCurrentValue();
   const targetItem = normalizedItems(state.correctionRecord).find(item => item.itemId === $("#correctionTarget").value);
+  updateCorrectionExistingValue(field, current);
   let control;
   if (correctionOptions[field]) {
     control = document.createElement("select");

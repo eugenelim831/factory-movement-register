@@ -26,13 +26,13 @@
 
     <section id="dispatch" class="panel active">
       <div class="section-heading">
-        <div><p class="step">New delivery</p><h2>Dispatch Transfer</h2></div>
+        <div><p class="step">New Delivery</p><h2>Dispatch Transfer</h2></div>
         <span class="status-badge out">IN TRANSIT</span>
       </div>
 
       <div class="draft-bar">
-        <label>Continue an existing draft
-          <select id="draftId"><option value="">New unsaved delivery</option></select>
+        <label>Continue an Existing Draft
+          <select id="draftId"><option value="">New Unsaved Delivery</option></select>
         </label>
         <button id="refreshDrafts" class="secondary" type="button">Refresh Drafts</button>
         <button id="newDraft" class="secondary" type="button">New Delivery</button>
@@ -43,47 +43,47 @@
 
       <form id="dispatchForm">
         <div class="form-grid">
-          <label>Transfer direction
+          <label>Transfer Direction
             <select name="direction" required>
-              <option value="" selected disabled>Select direction</option>
+              <option value="" selected disabled>Select Direction</option>
               <option value="Store/Slitter → Power Press">Store/Slitter → Power Press</option>
               <option value="Power Press → Store/Slitter">Power Press → Store/Slitter</option>
             </select>
           </label>
           <label>Driver
             <select name="driverName" required>
-              <option value="" selected disabled>Select driver</option>
+              <option value="" selected disabled>Select Driver</option>
               <option value="Maidin">Maidin</option>
               <option value="Deva">Deva</option>
               <option value="Gopi">Gopi</option>
             </select>
           </label>
-          <label>Vehicle number
+          <label>Vehicle Number
             <select name="vehicleNumber" required>
-              <option value="" selected disabled>Select vehicle</option>
+              <option value="" selected disabled>Select Vehicle</option>
               <option value="WC 3268N">WC 3268N</option>
               <option value="WTL8236">WTL8236</option>
               <option value="BMY3682">BMY3682</option>
             </select>
           </label>
-          <label>Released by (person-in-charge)
+          <label>Released By (Person-in-Charge)
             <select name="releasedBy" required><option value="" selected disabled>Select PIC</option><option value="Aung King">Aung King</option><option value="Nadia">Nadia</option><option value="Lina">Lina</option><option value="Lalit">Lalit</option><option value="Yati">Yati</option></select>
           </label>
-          <label class="wide">Purpose / production use<input name="purpose" required autocomplete="off"></label>
+          <label class="wide">Purpose / Production Use<input name="purpose" required autocomplete="off"></label>
         </div>
 
         <div class="items-heading">
-          <div><p class="step">Delivery contents</p><h3>Add every batch, size and component on this ride</h3></div>
+          <div><p class="step">Delivery Contents</p><h3>Add Every Batch, Size and Component on This Ride</h3></div>
           <button id="addItem" class="secondary" type="button">+ Add Item</button>
         </div>
         <div id="dispatchItems" class="item-list"></div>
 
-        <label class="wide remarks-label">Dispatch remarks<textarea name="remarks" rows="3"></textarea></label>
+        <label class="wide remarks-label">Dispatch Remarks<textarea name="remarks" rows="3"></textarea></label>
 
         <div class="signature-group">
-          <div><h3>Releasing person-in-charge signature</h3><p>Confirm all listed items and quantities before dispatch.</p></div>
+          <div><h3>Releasing Person-in-Charge Signature</h3><p>Confirm all listed items and quantities before dispatch.</p></div>
           <canvas id="releaseSignature" class="signature" aria-label="Releasing person-in-charge signature"></canvas>
-          <button class="link-button clear-signature" data-canvas="releaseSignature" type="button">Clear signature</button>
+          <button class="link-button clear-signature" data-canvas="releaseSignature" type="button">Clear Signature</button>
         </div>
         <label id="dispatchOnBehalf" class="on-behalf hidden"><input id="dispatchOnBehalfCheck" type="checkbox"> I confirm that I am entering this dispatch on behalf of the selected releasing PIC.</label>
         <div class="form-actions">
@@ -95,14 +95,14 @@
 
     <section id="receive" class="panel">
       <div class="section-heading">
-        <div><p class="step">Cross-check delivery</p><h2>Receive Transfer</h2></div>
+        <div><p class="step">Cross-Check Delivery</p><h2>Receive Transfer</h2></div>
         <span class="status-badge returned">VERIFY ITEMS</span>
       </div>
 
       <form id="receiveForm">
         <label>Open Delivery ID
           <div class="inline-field">
-            <select id="deliveryId" name="deliveryId" required><option value="">Loading open deliveries…</option></select>
+            <select id="deliveryId" name="deliveryId" required><option value="">Loading Open Deliveries…</option></select>
             <button id="refreshDeliveries" class="secondary" type="button">Refresh</button>
           </div>
         </label>
@@ -110,25 +110,25 @@
         <div id="receiveItems" class="receive-list"></div>
 
         <div class="form-grid receive-details">
-          <label>Received by (person-in-charge)
+          <label>Received By (Person-in-Charge)
             <select name="receivedBy" required><option value="" selected disabled>Select PIC</option><option value="Aung King">Aung King</option><option value="Nadia">Nadia</option><option value="Lina">Lina</option><option value="Lalit">Lalit</option><option value="Yati">Yati</option></select>
           </label>
-          <label>Overall condition
+          <label>Overall Condition
             <select name="receiptCondition" required>
               <option value="Good" selected>Good</option>
-              <option value="Quantity shortage">Quantity shortage</option>
+              <option value="Quantity shortage">Quantity Shortage</option>
               <option value="Damaged">Damaged</option>
-              <option value="Wrong item">Wrong item</option>
-              <option value="Other issue">Other issue</option>
+              <option value="Wrong item">Wrong Item</option>
+              <option value="Other issue">Other Issue</option>
             </select>
           </label>
-          <label class="wide">Receiving remarks<textarea name="receivingRemarks" rows="3" placeholder="Explain any missing item, mismatch or damage"></textarea></label>
+          <label class="wide">Receiving Remarks<textarea name="receivingRemarks" rows="3" placeholder="Explain any missing item, mismatch or damage"></textarea></label>
         </div>
 
         <div class="signature-group">
-          <div><h3>Receiving person-in-charge signature</h3><p>Sign only after checking every item against the delivery.</p></div>
+          <div><h3>Receiving Person-in-Charge Signature</h3><p>Sign only after checking every item against the delivery.</p></div>
           <canvas id="receiveSignature" class="signature" aria-label="Receiving person-in-charge signature"></canvas>
-          <button class="link-button clear-signature" data-canvas="receiveSignature" type="button">Clear signature</button>
+          <button class="link-button clear-signature" data-canvas="receiveSignature" type="button">Clear Signature</button>
         </div>
         <label id="receiveOnBehalf" class="on-behalf hidden"><input id="receiveOnBehalfCheck" type="checkbox"> I confirm that I am entering this receipt on behalf of the selected receiving PIC.</label>
         <label id="completeWithDiscrepancyBox" class="complete-with-discrepancy hidden"><input id="completeWithDiscrepancy" type="checkbox"> <span><strong>Complete Delivery With Recorded Discrepancies</strong><small>Confirm that every discrepancy listed below is accepted. The complete list remains permanently recorded.</small><ul id="acceptedDiscrepancyList" class="acceptance-discrepancy-list"></ul></span></label>
@@ -138,12 +138,12 @@
 
     <section id="records" class="panel">
       <div class="section-heading records-heading">
-        <div><p class="step">Delivery history</p><h2>All Delivery Records</h2></div>
+        <div><p class="step">Delivery History</p><h2>All Delivery Records</h2></div>
         <div class="actions"><button id="refreshRecords" class="secondary" type="button">Refresh</button><button id="exportCsv" class="primary compact" type="button">Export CSV</button></div>
       </div>
       <div class="filter-row">
         <input id="recordSearch" type="search" placeholder="Search Delivery ID, batch, item, driver or vehicle">
-        <select id="statusFilter"><option value="">All statuses</option><option value="DRAFT">Draft</option><option value="IN_TRANSIT">In Transit</option><option value="INCOMPLETE">Incomplete</option><option value="RECEIVED">Received</option><option value="RECEIVED_WITH_DISCREPANCY">Received With Discrepancy</option><option value="CANCELLED">Cancelled</option></select>
+        <select id="statusFilter"><option value="">All Statuses</option><option value="DRAFT">Draft</option><option value="IN_TRANSIT">In Transit</option><option value="INCOMPLETE">Incomplete</option><option value="RECEIVED">Received</option><option value="RECEIVED_WITH_DISCREPANCY">Received With Discrepancy</option><option value="CANCELLED">Cancelled</option></select>
       </div>
       <div class="table-wrap"><table>
         <thead><tr><th>Delivery ID</th><th>Direction</th><th>Items</th><th>Driver</th><th>Vehicle</th><th>Dispatch User</th><th>Receiving User</th><th>Dispatched</th><th>Received</th><th>Status</th><th>Action</th></tr></thead>
@@ -156,13 +156,13 @@
     <article class="item-card">
       <div class="item-card-head"><strong class="item-number">Item</strong><button class="remove-item link-button" type="button">Remove</button></div>
       <div class="form-grid item-fields">
-        <label>Item type<select class="item-type" required><option value="BATCH">Tinplate batch</option><option value="COMPONENT">Component</option></select></label>
+        <label>Item Type<select class="item-type" required><option value="BATCH">Tinplate Batch</option><option value="COMPONENT">Component</option></select></label>
         <label class="batch-field">Batch Number<input class="batch-number" placeholder="e.g. enter 123456 for 12/3456" inputmode="numeric" pattern="[0-9/]+" autocomplete="off"></label>
         <fieldset class="batch-field size-entry"><legend>Tinplate Size</legend><label>Thickness<input class="size-thickness" type="text" inputmode="numeric" pattern="[0-9]+" placeholder="23"><small>Enter 23 for 0.23 mm</small></label><label>Width (mm)<input class="size-width" type="number" inputmode="numeric" min="1" step="1" placeholder="960"></label><label>Length (mm)<input class="size-length" type="number" inputmode="numeric" min="1" step="1" placeholder="905"></label><label>Stored Dimensions<input class="item-size stored-size" type="text" readonly placeholder="0.23*960*905"></label></fieldset>
-        <label>Item description<input class="item-description" required placeholder="e.g. Printed tinplate or 603D lids"></label>
+        <label>Item Description<input class="item-description" required placeholder="e.g. Printed tinplate or 603D lids"></label>
         <label>Quantity <span class="quantity-unit-hint"></span><input class="item-quantity" type="number" inputmode="numeric" min="1" step="1" required></label>
         <label>Unit<select class="item-unit" required><option value="pieces">Pieces</option><option value="blanks">Blanks</option><option value="bags">Bags</option><option value="sets">Sets</option><option value="pallets">Pallets</option><option value="sheets">Sheets</option></select></label>
-        <label class="per-unit-field hidden">Pieces per bag<input class="pieces-per-unit" type="number" inputmode="numeric" min="1" step="1" placeholder="e.g. 7000"></label>
+        <label class="per-unit-field hidden">Pieces Per Bag<input class="pieces-per-unit" type="number" inputmode="numeric" min="1" step="1" placeholder="e.g. 7000"></label>
       </div>
       <p class="format-hint batch-field">Enter batch digits only; the slash is inserted after the first two digits. Enter thickness as 23 for 0.23 mm. Length and width accept whole millimetres only. Tinplate quantity is always recorded in sheets.</p>
     </article>
@@ -171,14 +171,14 @@
   <dialog id="settingsDialog"><form method="dialog">
     <div class="dialog-heading"><h2>Connection Settings</h2><button class="icon-button" value="cancel" aria-label="Close settings">×</button></div>
     <p>Enter the protected API address. Each PIC signs in separately afterward.</p>
-    <label>API address<input id="apiUrl" type="url" placeholder="https://your-worker.workers.dev"></label>
+    <label>API Address<input id="apiUrl" type="url" placeholder="https://your-worker.workers.dev"></label>
     <button id="saveSettings" class="primary" value="default">Save Settings</button>
   </form></dialog>
 
   <dialog id="loginDialog"><form id="loginForm">
     <div class="dialog-heading"><h2>PIC Login</h2></div>
     <p>Select your own name and enter your individual PIN.</p>
-    <label>Your name<select id="loginName" required><option value="" selected disabled>Select your name</option><option value="Aung King">Aung King</option><option value="Nadia">Nadia</option><option value="Lina">Lina</option><option value="Lalit">Lalit</option><option value="Yati">Yati</option><option value="Eugene">Eugene</option></select></label>
+    <label>Your Name<select id="loginName" required><option value="" selected disabled>Select Your Name</option><option value="Aung King">Aung King</option><option value="Nadia">Nadia</option><option value="Lina">Lina</option><option value="Lalit">Lalit</option><option value="Yati">Yati</option><option value="Eugene">Eugene</option></select></label>
     <label>Your PIN<input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required></label>
     <button id="loginButton" class="primary" type="submit">Log in</button>
   </form></dialog>
@@ -194,10 +194,11 @@
     <div class="dialog-heading"><h2>Correct Delivery Record</h2><button class="icon-button" id="closeCorrection" type="button" aria-label="Close">×</button></div>
     <p>Every correction keeps the original value, logged-in user, reason, date and time.</p>
     <label>Delivery ID<input id="correctionDeliveryId" readonly></label>
-    <label>Correction target<select id="correctionTarget" required></select></label>
+    <label>Correction Target<select id="correctionTarget" required></select></label>
     <label>Field<select id="correctionField" required></select></label>
-    <label id="correctionValueField"><span>Corrected value</span><span id="correctionValueControl"></span></label>
-    <label>Reason for correction<textarea id="correctionReason" rows="3" required></textarea></label>
+    <div class="existing-value-panel" aria-live="polite"><span>Existing Value</span><strong id="correctionExistingValue">—</strong><small id="correctionExistingContext"></small></div>
+    <label id="correctionValueField"><span>Corrected Value</span><span id="correctionValueControl"></span></label>
+    <label>Reason for Correction<textarea id="correctionReason" rows="3" required></textarea></label>
     <button class="primary" type="submit">Save Correction</button>
   </form></dialog>
 
@@ -205,18 +206,18 @@
     <div class="dialog-heading"><h2>Cancel In-Transit Delivery</h2><button class="icon-button" id="closeCancel" type="button" aria-label="Close">×</button></div>
     <p>The delivery will be marked <strong>CANCELLED</strong>, removed from Receiving, and retained permanently in Records for audit.</p>
     <label>Delivery ID<input id="cancelDeliveryId" readonly></label>
-    <label>Compulsory cancellation reason<textarea id="cancelReason" rows="4" maxlength="500" required></textarea></label>
+    <label>Compulsory Cancellation Reason<textarea id="cancelReason" rows="4" maxlength="500" required></textarea></label>
     <label class="confirmation-check"><input id="cancelConfirm" type="checkbox" required> <span>I confirm that this in-transit delivery must be cancelled.</span></label>
     <button class="primary danger-button" type="submit">Cancel and Retain Record</button>
   </form></dialog>
 
   <dialog id="recordDialog" class="record-dialog"><div class="dialog-content">
-    <div class="dialog-heading"><div><p class="step">Read-only record</p><h2 id="recordDialogTitle">Delivery Record</h2></div><button id="closeRecord" class="icon-button" type="button" aria-label="Close record">×</button></div>
+    <div class="dialog-heading"><div><p class="step">Read-Only Record</p><h2 id="recordDialogTitle">Delivery Record</h2></div><button id="closeRecord" class="icon-button" type="button" aria-label="Close record">×</button></div>
     <div id="recordView"></div>
   </div></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="qrcode.js?v=26"></script>
-  <script src="app.js?v=26"></script>
+  <script src="qrcode.js?v=27"></script>
+  <script src="app.js?v=27"></script>
 </body>
 </html>

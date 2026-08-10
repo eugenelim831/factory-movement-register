@@ -196,6 +196,10 @@ tbody tr:last-child td { border-bottom: 0; }
 .qr-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; margin-top: 1rem; }
 .confirmation-check { display: flex; align-items: flex-start; gap: .7rem; line-height: 1.45; }
 .confirmation-check input { flex: 0 0 20px; width: 20px; min-height: 20px; height: 20px; margin: .15rem 0 0; padding: 0; }
+.existing-value-panel { display: grid; gap: .35rem; padding: 1rem; border-left: 4px solid var(--green); border-radius: 10px; background: #eef6f3; }
+.existing-value-panel > span { color: var(--muted); font-size: .78rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.existing-value-panel > strong { color: var(--green-dark); font-size: 1.08rem; overflow-wrap: anywhere; }
+.existing-value-panel > small { color: var(--muted); font-weight: 650; }
 dialog { width: min(500px, calc(100% - 32px)); padding: 0; border: 0; border-radius: 18px; box-shadow: 0 30px 90px rgba(0,0,0,.3); }
 dialog::backdrop { background: rgba(13, 34, 28, .66); }
 dialog form { display: grid; gap: 18px; padding: 26px; }
