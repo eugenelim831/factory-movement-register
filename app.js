@@ -21,6 +21,7 @@ function formatBatchDigits(value) {
   return digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits;
 }
 function batchIsValid(value) { return /^\d{2}\/\d+$/.test(String(value || "")); }
+function sizeIsValid(value) { return /^0\.[1-9]\d*\*[1-9]\d*\*[1-9]\d*$/.test(String(value || "")); }
 function splitSize(value) {
   const match = String(value || "").match(/^0\.(\d+)\*(\d+)\*(\d+)$/);
   return match ? { thickness: match[1], width: match[2], length: match[3] } : { thickness: "", width: "", length: "" };
@@ -180,6 +181,7 @@ function updateItemCard(card) {
   const isBag = card.querySelector(".item-unit").value === "bags";
   card.querySelector(".per-unit-field").classList.toggle("hidden", !isBag);
   card.querySelector(".pieces-per-unit").required = isBag;
+  if (isBag) enforceWholeNumber(card.querySelector(".pieces-per-unit"), 1);
 }
 
 function renumberItems() {
@@ -193,7 +195,7 @@ function collectDispatchItems() {
     const batchNumber = card.querySelector(".batch-number").value.trim().replaceAll(" ", "");
     const size = composeSize(card);
     if (type === "BATCH" && !batchIsValid(batchNumber)) throw new Error(`Item ${index + 1}: enter at least three batch digits. The system inserts a slash after the first two digits.`);
-    if (type === "BATCH" && !/^0\.\d+\*\d+\*\d+$/.test(size)) throw new Error(`Item ${index + 1}: size must look like 0.23*950*740.`);
+    if (type === "BATCH" && !sizeIsValid(size)) throw new Error(`Item ${index + 1}: thickness, width and length must all be positive whole numbers.`);
     const quantity = Number(card.querySelector(".item-quantity").value);
     if (!Number.isInteger(quantity) || quantity <= 0) throw new Error(`Item ${index + 1}: quantity must be a whole number of sheets or units.`);
     return {
@@ -417,7 +419,7 @@ function renderReceiveItems(record) {
     </article>`;
   }).join("");
   $$("#receiveItems .actual-batch").forEach(input => input.addEventListener("input", () => { input.value = formatBatchDigits(input.value); }));
-  $$("#receiveItems .receive-card").forEach((card, index) => { if (normalizedItems(record)[index]?.unit === "sheets") enforceWholeNumber(card.querySelector(".actual-quantity"), 0); });
+  $$("#receiveItems .receive-card").forEach((card, index) => { if (normalizedItems(record)[index]?.unit === "sheets") enforceWholeNumber(card.querySelector(".actual-quantity"), 0); if (card.querySelector(".actual-per-unit")) enforceWholeNumber(card.querySelector(".actual-per-unit"), 1); });
   $$("#receiveItems .receive-card").forEach(card => {
     const present = card.querySelector(".item-present"); const quantity = card.querySelector(".actual-quantity");
     if (present.disabled) return;
@@ -656,7 +658,7 @@ $("#correctionField").addEventListener("change", updateCorrectionValueControl);
 $("#closeCorrection").addEventListener("click", () => $("#correctionDialog").close());
 $("#correctionForm").addEventListener("submit", async event => {
   event.preventDefault(); const button = event.currentTarget.querySelector("[type=submit]"); button.disabled = true;
-  try { const field = $("#correctionField").value; const value = $("#correctionValue").value; if (field === "batchNumber" && !batchIsValid(value)) throw new Error("Enter at least three batch digits; the slash is inserted after the first two digits."); if (["quantity", "piecesPerUnit"].includes(field) && (!Number.isInteger(Number(value)) || Number(value) <= 0)) throw new Error("Corrected quantity must be a positive whole number."); await api(`/records/${encodeURIComponent($("#correctionDeliveryId").value)}/corrections`, { method: "POST", body: JSON.stringify({ target: $("#correctionTarget").value, field, value, reason: $("#correctionReason").value.trim() }) }); $("#correctionDialog").close(); await loadRecords(); showToast("Correction saved with its audit history."); } catch (error) { showToast(error.message, true); } finally { button.disabled = false; }
+  try { const field = $("#correctionField").value; const value = $("#correctionValue").value; if (field === "batchNumber" && !batchIsValid(value)) throw new Error("Enter at least three batch digits; the slash is inserted after the first two digits."); if (field === "size" && !sizeIsValid(value)) throw new Error("Thickness, width and length must all be positive whole numbers."); if (["quantity", "piecesPerUnit"].includes(field) && (!Number.isInteger(Number(value)) || Number(value) <= 0)) throw new Error("Corrected quantity must be a positive whole number."); await api(`/records/${encodeURIComponent($("#correctionDeliveryId").value)}/corrections`, { method: "POST", body: JSON.stringify({ target: $("#correctionTarget").value, field, value, reason: $("#correctionReason").value.trim() }) }); $("#correctionDialog").close(); await loadRecords(); showToast("Correction saved with its audit history."); } catch (error) { showToast(error.message, true); } finally { button.disabled = false; }
 });
 
 function showQr(id) {
