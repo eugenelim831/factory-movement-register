@@ -1,4 +1,4 @@
-const state = { records: [], openDeliveries: [], selectedDelivery: null, drafts: [], editingDraftId: null, autoSaveTimer: null, autoSaveBusy: false, correctionRecord: null, cancelRecord: null, currentQrDataUrl: "", currentQrId: "", inactivityTimer: null, inactivityWarningTimer: null };
+const state = { records: [], openDeliveries: [], selectedDelivery: null, drafts: [], editingDraftId: null, autoSaveTimer: null, autoSaveBusy: false, dispatchStep: 1, correctionRecord: null, cancelRecord: null, currentQrDataUrl: "", currentQrId: "", inactivityTimer: null, inactivityWarningTimer: null };
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const DEFAULT_API_URL = "https://factory-movement-api.eugenelim831-1b3.workers.dev";
@@ -222,6 +222,8 @@ function collectDispatchItems() {
     const size = composeSize(card);
     if (type === "BATCH" && !batchIsValid(batchNumber)) throw new Error(`Item ${index + 1}: enter at least three batch digits. The system inserts a slash after the first two digits.`);
     if (type === "BATCH" && !sizeIsValid(size)) throw new Error(`Item ${index + 1}: thickness, width and length must all be positive whole numbers.`);
+    const description = card.querySelector(".item-description").value.trim();
+    if (!description) throw new Error(`Item ${index + 1}: enter an item description.`);
     const quantity = Number(card.querySelector(".item-quantity").value);
     if (!Number.isInteger(quantity) || quantity <= 0) throw new Error(`Item ${index + 1}: quantity must be a positive whole number.`);
     return {
@@ -229,7 +231,7 @@ function collectDispatchItems() {
       type,
       batchNumber: type === "BATCH" ? batchNumber : "",
       size: type === "BATCH" ? size : "",
-      description: card.querySelector(".item-description").value.trim(),
+      description,
       quantity,
       unit: type === "BATCH" ? "blanks" : card.querySelector(".item-unit").value,
       piecesPerUnit: card.querySelector(".item-unit").value === "bags" ? Number(card.querySelector(".pieces-per-unit").value) : null
@@ -271,6 +273,7 @@ function resetDispatchForm() {
   $("#draftId").value = "";
   $("#draftState").textContent = "You are preparing a new delivery.";
   $("#abandonDraft").disabled = true; $("#deleteDraft").disabled = true;
+  setDispatchStep(1);
   updateOnBehalf();
 }
 
@@ -288,6 +291,7 @@ function populateDraft(record) {
   state.editingDraftId = record.id;
   $("#draftState").textContent = `Editing saved draft ${record.id}. Changes will save automatically after you make edits.`;
   $("#abandonDraft").disabled = false; $("#deleteDraft").disabled = false;
+  setDispatchStep(1);
   updateOnBehalf();
 }
 
@@ -358,8 +362,39 @@ $("#receiveForm").elements.receivedBy.addEventListener("change", updateOnBehalf)
 $("#addItem").addEventListener("click", () => { addDispatchItem(); scheduleAutoSave(); });
 addDispatchItem();
 
+function validateDispatchStep(step) {
+  if (step === 1) {
+    const invalid = [...$("#dispatchForm").querySelectorAll('[data-dispatch-step="1"] [required]')].find(input => !input.checkValidity());
+    if (invalid) { invalid.reportValidity(); invalid.focus(); invalid.scrollIntoView({ behavior: "smooth", block: "center" }); return false; }
+  }
+  if (step === 2) {
+    try { collectDispatchItems(); } catch (error) { focusItemError(error.message); showToast(error.message, true); return false; }
+  }
+  return true;
+}
+function renderInlineDispatchReview() {
+  const data = dispatchHeaderData($("#dispatchForm")); const items = collectDispatchItems();
+  const itemHtml = items.map((item,index) => `<div class="received-item-line"><strong>Item ${index + 1}: ${escapeHtml(item.description)}</strong><span>Type: ${item.type === "BATCH" ? "Tinplate Batch" : "Component"}</span>${item.type === "BATCH" ? `<span>Batch: ${escapeHtml(item.batchNumber)} · Size: ${escapeHtml(item.size)}</span>` : ""}<span>Quantity: ${item.quantity} ${escapeHtml(displayUnit(item.unit))}${item.piecesPerUnit ? ` · ${item.piecesPerUnit} Pieces Per Bag` : ""}</span></div>`).join("");
+  $("#inlineDispatchReview").innerHTML = reviewTable([["Direction", escapeHtml(data.direction)], ["Driver", escapeHtml(data.driverName)], ["Vehicle", escapeHtml(data.vehicleNumber)], ["Released By", escapeHtml(data.releasedBy)], ["Purpose", escapeHtml(data.purpose)], ["Items", itemHtml], ["Remarks", escapeHtml(data.remarks || "None")]]);
+}
+function setDispatchStep(step) {
+  state.dispatchStep = Math.min(4, Math.max(1, Number(step) || 1));
+  $$("[data-dispatch-step]").forEach(panel => panel.classList.toggle("active", Number(panel.dataset.dispatchStep) === state.dispatchStep));
+  $$("[data-dispatch-step-button]").forEach(button => { const number = Number(button.dataset.dispatchStepButton); button.classList.toggle("active", number === state.dispatchStep); button.classList.toggle("completed", number < state.dispatchStep); });
+  $("#previousDispatchStep").classList.toggle("hidden", state.dispatchStep === 1);
+  $("#nextDispatchStep").classList.toggle("hidden", state.dispatchStep === 4);
+  $("#confirmDispatchButton").classList.toggle("hidden", state.dispatchStep !== 4);
+  const labels = { 1: "Continue to Items", 2: "Continue to Review", 3: "Continue to Signature" }; $("#nextDispatchStep").textContent = labels[state.dispatchStep] || "Continue";
+  if (state.dispatchStep === 3) renderInlineDispatchReview();
+  $("#dispatchForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+$("#nextDispatchStep").addEventListener("click", () => { if (validateDispatchStep(state.dispatchStep)) setDispatchStep(state.dispatchStep + 1); });
+$("#previousDispatchStep").addEventListener("click", () => setDispatchStep(state.dispatchStep - 1));
+$(".workflow-steps").addEventListener("click", event => { const button = event.target.closest("[data-dispatch-step-button]"); if (!button) return; const requested = Number(button.dataset.dispatchStepButton); if (requested < state.dispatchStep) setDispatchStep(requested); else if (requested === state.dispatchStep + 1 && validateDispatchStep(state.dispatchStep)) setDispatchStep(requested); });
+
 $("#dispatchForm").addEventListener("submit", async event => {
   event.preventDefault();
+  if (state.dispatchStep !== 4) { showToast("Complete each dispatch step before submitting.", true); return; }
   const form = event.currentTarget;
   const signature = $("#releaseSignature").signatureData();
   if (!signature) return showToast("Releasing person-in-charge signature is required.", true);

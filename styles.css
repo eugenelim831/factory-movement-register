@@ -95,8 +95,13 @@ header .secondary { border-color: rgba(255,255,255,.45); color: white; backgroun
 .draft-bar { display: grid; grid-template-columns: minmax(240px, 1fr) repeat(4, auto); gap: 10px; align-items: end; margin-bottom: 8px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #f7faf9; }
 .draft-state { margin-bottom: 24px; color: var(--muted); font-weight: 700; }
 .workflow-steps { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 22px; }
-.workflow-steps span { padding: 9px; border-radius: 9px; color: var(--muted); background: #eef3f1; text-align: center; font-size: 12px; font-weight: 800; }
-.workflow-steps span.active { color: white; background: var(--green); }
+.workflow-steps button { min-height: 42px; padding: 9px; border: 0; border-radius: 9px; color: var(--muted); background: #eef3f1; text-align: center; font-size: 12px; font-weight: 800; }
+.workflow-steps button.active { color: white; background: var(--green); }
+.workflow-steps button.completed { color: var(--green-dark); background: #dff5ee; }
+.dispatch-step-panel { display: none; }
+.dispatch-step-panel.active { display: block; }
+.step-review-heading { margin-bottom: 16px; }
+.inline-dispatch-review { display: grid; gap: 14px; }
 .action-required { margin: -10px 0 22px; padding: 15px 17px; border-left: 4px solid var(--amber); border-radius: 9px; background: #fff8e8; }
 .action-required h3 { margin-bottom: 6px; }
 .action-required ul { margin: 0; padding-left: 20px; }

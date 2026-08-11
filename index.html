@@ -42,8 +42,8 @@
       <p id="draftState" class="draft-state">You are preparing a new delivery.</p>
 
       <form id="dispatchForm">
-        <div class="workflow-steps" aria-label="Dispatch steps"><span class="active">1. Delivery Details</span><span>2. Items</span><span>3. Review</span><span>4. Signature</span></div>
-        <div class="form-grid">
+        <div class="workflow-steps" aria-label="Dispatch steps"><button class="active" data-dispatch-step-button="1" type="button">1. Delivery Details</button><button data-dispatch-step-button="2" type="button">2. Items</button><button data-dispatch-step-button="3" type="button">3. Review</button><button data-dispatch-step-button="4" type="button">4. Signature</button></div>
+        <section class="dispatch-step-panel active" data-dispatch-step="1"><div class="form-grid">
           <label>Transfer Direction
             <select name="direction" required>
               <option value="" selected disabled>Select Direction</option>
@@ -71,8 +71,9 @@
             <select name="releasedBy" required><option value="" selected disabled>Select PIC</option><option value="Aung King">Aung King</option><option value="Nadia">Nadia</option><option value="Lina">Lina</option><option value="Lalit">Lalit</option><option value="Yati">Yati</option></select>
           </label>
           <label class="wide">Purpose / Production Use<input name="purpose" required autocomplete="off"></label>
-        </div>
+        </div></section>
 
+        <section class="dispatch-step-panel" data-dispatch-step="2">
         <div class="items-heading">
           <div><p class="step">Delivery Contents</p><h3>Add Every Batch, Size and Component on This Ride</h3></div>
           <button id="addItem" class="secondary" type="button">+ Add Item</button>
@@ -80,16 +81,26 @@
         <div id="dispatchItems" class="item-list"></div>
 
         <label class="wide remarks-label">Dispatch Remarks<textarea name="remarks" rows="3"></textarea></label>
+        </section>
 
+        <section class="dispatch-step-panel" data-dispatch-step="3">
+          <div class="step-review-heading"><p class="step">Confirm Before Signing</p><h3>Review the Complete Delivery</h3><p>Use Back to correct anything that is wrong.</p></div>
+          <div id="inlineDispatchReview" class="inline-dispatch-review"></div>
+        </section>
+
+        <section class="dispatch-step-panel" data-dispatch-step="4">
         <div class="signature-group">
           <div><h3>Releasing Person-in-Charge Signature</h3><p>Confirm all listed items and quantities before dispatch.</p></div>
           <canvas id="releaseSignature" class="signature" aria-label="Releasing person-in-charge signature"></canvas>
           <button class="link-button clear-signature" data-canvas="releaseSignature" type="button">Clear Signature</button>
         </div>
         <label id="dispatchOnBehalf" class="on-behalf hidden"><input id="dispatchOnBehalfCheck" type="checkbox"> I confirm that I am entering this dispatch on behalf of the selected releasing PIC.</label>
+        </section>
         <div class="form-actions">
           <button id="saveDraft" class="secondary submit-button" type="button">Save Draft</button>
-          <button class="primary submit-button" type="submit">Confirm Dispatch</button>
+          <button id="previousDispatchStep" class="secondary submit-button hidden" type="button">Back</button>
+          <button id="nextDispatchStep" class="primary submit-button" type="button">Continue to Items</button>
+          <button id="confirmDispatchButton" class="primary submit-button hidden" type="submit">Confirm Dispatch</button>
         </div>
       </form>
     </section>
@@ -227,7 +238,7 @@
   </div></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="qrcode.js?v=32"></script>
-  <script src="app.js?v=32"></script>
+  <script src="qrcode.js?v=33"></script>
+  <script src="app.js?v=33"></script>
 </body>
 </html>
