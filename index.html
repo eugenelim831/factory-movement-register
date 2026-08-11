@@ -161,7 +161,7 @@
         <fieldset class="batch-field size-entry"><legend>Tinplate Size</legend><label>Thickness<input class="size-thickness" type="text" inputmode="numeric" pattern="[0-9]+" placeholder="23"><small>Enter 23 for 0.23 mm</small></label><label>Width (mm)<input class="size-width" type="number" inputmode="numeric" min="1" step="1" placeholder="960"></label><label>Length (mm)<input class="size-length" type="number" inputmode="numeric" min="1" step="1" placeholder="905"></label><label>Stored Dimensions<input class="item-size stored-size" type="text" readonly placeholder="0.23*960*905"></label></fieldset>
         <label>Item Description<input class="item-description" required placeholder="e.g. Printed tinplate or 603D lids"></label>
         <label>Quantity <span class="quantity-unit-hint"></span><input class="item-quantity" type="number" inputmode="numeric" min="1" step="1" required></label>
-        <label class="unit-field">Unit<select class="item-unit" required><option value="pieces">Pieces</option><option value="bags">Bags</option><option value="blanks" hidden>Blanks</option></select></label>
+        <label class="unit-field">Unit<select class="item-unit" required><option value="pieces">Pieces</option><option value="bags">Bags</option></select></label>
         <label class="per-unit-field hidden">Pieces Per Bag<input class="pieces-per-unit" type="number" inputmode="numeric" min="1" step="1" placeholder="e.g. 7000"></label>
       </div>
       <p class="format-hint batch-field">Enter batch digits only; the slash is inserted after the first two digits. Enter thickness as 23 for 0.23 mm. Length and width accept whole millimetres only. Tinplate Batch quantity is always recorded in Blanks.</p>
@@ -217,7 +217,7 @@
   </div></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="qrcode.js?v=28"></script>
-  <script src="app.js?v=28"></script>
+  <script src="qrcode.js?v=29"></script>
+  <script src="app.js?v=29"></script>
 </body>
 </html>
