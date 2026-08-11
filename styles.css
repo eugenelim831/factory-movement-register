@@ -31,6 +31,9 @@ header {
 }
 .account-actions { display: flex; align-items: center; gap: 8px; }
 .account-actions span { margin-right: 5px; color: #d8ebe5; font-weight: 800; }
+.connection-status { padding: 5px 9px; border-radius: 999px; background: rgba(255,255,255,.12); font-size: 11px; }
+.connection-status.online { color: #d7ffef; background: rgba(37,180,126,.25); }
+.connection-status.offline { color: #ffe1dc; background: rgba(190,50,40,.35); }
 h1, h2, h3, p { margin-top: 0; }
 h1 { margin-bottom: 4px; font-size: clamp(28px, 4vw, 42px); letter-spacing: -.04em; }
 h2 { margin-bottom: 0; font-size: 25px; letter-spacing: -.025em; }
@@ -91,6 +94,19 @@ header .secondary { border-color: rgba(255,255,255,.45); color: white; backgroun
 .form-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .draft-bar { display: grid; grid-template-columns: minmax(240px, 1fr) repeat(4, auto); gap: 10px; align-items: end; margin-bottom: 8px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #f7faf9; }
 .draft-state { margin-bottom: 24px; color: var(--muted); font-weight: 700; }
+.workflow-steps { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 22px; }
+.workflow-steps span { padding: 9px; border-radius: 9px; color: var(--muted); background: #eef3f1; text-align: center; font-size: 12px; font-weight: 800; }
+.workflow-steps span.active { color: white; background: var(--green); }
+.action-required { margin: -10px 0 22px; padding: 15px 17px; border-left: 4px solid var(--amber); border-radius: 9px; background: #fff8e8; }
+.action-required h3 { margin-bottom: 6px; }
+.action-required ul { margin: 0; padding-left: 20px; }
+.review-dialog { width: min(760px, calc(100% - 24px)); }
+.review-table { overflow-x: auto; }
+.review-table table { white-space: normal; }
+.field-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 3px rgba(164,60,50,.12) !important; }
+.activity-timeline { display: grid; gap: 10px; }
+.timeline-event { display: grid; grid-template-columns: 130px 1fr; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.timeline-event time { color: var(--muted); font-size: 12px; font-weight: 750; }
 .danger-button { color: var(--danger); }
 .on-behalf { display: flex; grid-auto-flow: column; align-items: center; gap: 10px; margin-top: 16px; padding: 13px; border: 1px solid #e1bf7d; border-radius: 10px; background: #fff7e8; }
 .on-behalf input { width: 20px; min-height: 20px; accent-color: var(--green); }
@@ -228,6 +244,8 @@ dialog form { display: grid; gap: 18px; padding: 26px; }
   .items-heading button { width: 100%; }
   .expected-grid { grid-template-columns: 1fr 1fr; }
   .draft-bar, .form-actions { grid-template-columns: 1fr; }
+  .workflow-steps { grid-template-columns: 1fr 1fr; }
+  .timeline-event { grid-template-columns: 1fr; gap: 2px; }
   .size-entry, .qr-actions { grid-template-columns: 1fr; }
   .size-entry label { white-space: normal; }
 }

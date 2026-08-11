@@ -14,7 +14,7 @@
       <h1>Transfer Register</h1>
       <p class="subtitle">Record and verify internal deliveries between Store/Slitter and Power Press.</p>
     </div>
-    <div class="account-actions"><span id="currentUser">Not signed in</span><button id="headerLoginButton" class="primary" type="button">Log in</button><button id="logoutButton" class="secondary hidden" type="button">Log out</button><button id="settingsButton" class="secondary" type="button">Settings</button></div>
+    <div class="account-actions"><span id="connectionStatus" class="connection-status">Checking Connection…</span><span id="currentUser">Not signed in</span><button id="headerLoginButton" class="primary" type="button">Log in</button><button id="logoutButton" class="secondary hidden" type="button">Log out</button><button id="settingsButton" class="secondary" type="button">Settings</button></div>
   </header>
 
   <main>
@@ -42,6 +42,7 @@
       <p id="draftState" class="draft-state">You are preparing a new delivery.</p>
 
       <form id="dispatchForm">
+        <div class="workflow-steps" aria-label="Dispatch steps"><span class="active">1. Delivery Details</span><span>2. Items</span><span>3. Review</span><span>4. Signature</span></div>
         <div class="form-grid">
           <label>Transfer Direction
             <select name="direction" required>
@@ -107,6 +108,7 @@
           </div>
         </label>
         <div id="deliverySummary" class="record-summary empty">Select an open Delivery ID to view all items.</div>
+        <div id="receivingAction" class="action-required hidden"></div>
         <div id="receiveItems" class="receive-list"></div>
 
         <div class="form-grid receive-details">
@@ -216,8 +218,16 @@
     <div id="recordView"></div>
   </div></dialog>
 
+  <dialog id="reviewDialog" class="review-dialog"><div class="dialog-content">
+    <div class="dialog-heading"><h2 id="reviewTitle">Review Before Submitting</h2><button id="closeReview" class="icon-button" type="button" aria-label="Close review">×</button></div>
+    <p>Check every detail below. Go back if anything is incorrect.</p>
+    <div id="reviewContent"></div>
+    <label class="confirmation-check"><input id="reviewConfirm" type="checkbox"> <span>I have checked the information above and confirm it is correct.</span></label>
+    <button id="confirmReview" class="primary" type="button" disabled>Confirm and Submit</button>
+  </div></dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="qrcode.js?v=29"></script>
-  <script src="app.js?v=29"></script>
+  <script src="qrcode.js?v=32"></script>
+  <script src="app.js?v=32"></script>
 </body>
 </html>

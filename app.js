@@ -15,6 +15,10 @@ function showToast(message, error = false) {
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => toast.className = "toast", 4000);
 }
+function setConnectionStatus(mode, text) { const badge = $("#connectionStatus"); if (!badge) return; badge.className = `connection-status ${mode}`; badge.textContent = text; }
+window.addEventListener("online", () => setConnectionStatus("online", "Online"));
+window.addEventListener("offline", () => setConnectionStatus("offline", "Connection Lost"));
+setConnectionStatus(navigator.onLine ? "online" : "offline", navigator.onLine ? "Online" : "Connection Lost");
 
 function formatBatchDigits(value) {
   const digits = String(value || "").replace(/\D/g, "").slice(0, 30);
@@ -55,15 +59,32 @@ function requireSettings() {
 
 async function api(path, options = {}) {
   if (!requireSettings()) throw new Error("Connection settings are missing.");
-  const response = await fetch(`${config.apiUrl.replace(/\/$/, "")}${path}`, {
-    ...options,
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${config.token}`, ...(options.headers || {}) }
-  });
+  setConnectionStatus("", options.method && options.method !== "GET" ? "Saving…" : "Loading…");
+  let response;
+  try { response = await fetch(`${config.apiUrl.replace(/\/$/, "")}${path}`, {
+      ...options,
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${config.token}`, ...(options.headers || {}) }
+    });
+  } catch { setConnectionStatus("offline", "Connection Lost"); throw new Error("Connection lost. Nothing was submitted. Keep this page open and try again when the connection returns."); }
   const body = await response.json().catch(() => ({}));
   if (response.status === 401) { clearSession(); showLogin(); }
-  if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
+  if (!response.ok) { setConnectionStatus(navigator.onLine ? "online" : "offline", navigator.onLine ? "Online" : "Connection Lost"); throw new Error(body.error || `Request failed (${response.status})`); }
+  setConnectionStatus("online", options.method && options.method !== "GET" ? "Saved" : "Online");
   return body;
 }
+
+let reviewResolver = null;
+function requestFinalReview(title, html) {
+  $("#reviewTitle").textContent = title; $("#reviewContent").innerHTML = html; $("#reviewConfirm").checked = false; $("#confirmReview").disabled = true; $("#reviewDialog").showModal();
+  return new Promise(resolve => reviewResolver = resolve);
+}
+function closeReview(result = false) { if ($("#reviewDialog").open) $("#reviewDialog").close(); if (reviewResolver) { const resolve = reviewResolver; reviewResolver = null; resolve(result); } }
+$("#reviewConfirm").addEventListener("change", event => $("#confirmReview").disabled = !event.target.checked);
+$("#confirmReview").addEventListener("click", () => closeReview(true));
+$("#closeReview").addEventListener("click", () => closeReview(false));
+$("#reviewDialog").addEventListener("cancel", event => { event.preventDefault(); closeReview(false); });
+function reviewTable(rows) { return `<div class="review-table"><table><tbody>${rows.map(([label,value]) => `<tr><th>${escapeHtml(label)}</th><td>${value}</td></tr>`).join("")}</tbody></table></div>`; }
+function focusItemError(message) { const match = String(message).match(/Item (\d+)/i); const card = match ? $$("#dispatchItems .item-card")[Number(match[1]) - 1] : null; if (card) { card.classList.add("field-invalid"); card.scrollIntoView({ behavior: "smooth", block: "center" }); setTimeout(() => card.classList.remove("field-invalid"), 4000); } }
 
 function setupSignature(canvas) {
   const context = canvas.getContext("2d");
@@ -350,6 +371,9 @@ $("#dispatchForm").addEventListener("submit", async event => {
   data.signature = signature;
   data.requestId = pendingDispatchRequestId();
   data.enteredOnBehalf = data.releasedBy !== config.user;
+  const itemReview = items.map((item, index) => `<div class="received-item-line"><strong>Item ${index + 1}: ${escapeHtml(item.description)}</strong><span>${item.type === "BATCH" ? `${escapeHtml(item.batchNumber)} · ${escapeHtml(item.size)} · ` : ""}${item.quantity} ${escapeHtml(displayUnit(item.unit))}${item.piecesPerUnit ? ` · ${item.piecesPerUnit} Pieces Per Bag` : ""}</span></div>`).join("");
+  const approved = await requestFinalReview("Review Dispatch Before Submitting", reviewTable([["Direction", escapeHtml(data.direction)], ["Driver", escapeHtml(data.driverName)], ["Vehicle", escapeHtml(data.vehicleNumber)], ["Released By", escapeHtml(data.releasedBy)], ["Purpose", escapeHtml(data.purpose)], ["Items", itemReview], ["Remarks", escapeHtml(data.remarks || "None")]]));
+  if (!approved) return;
   const button = form.querySelector("[type=submit]");
   button.disabled = true; button.textContent = "Saving…";
   try {
@@ -358,7 +382,7 @@ $("#dispatchForm").addEventListener("submit", async event => {
       : await api("/records", { method: "POST", body: JSON.stringify(data) });
     sessionStorage.removeItem("pendingDispatchRequestId"); showQr(result.record.id); resetDispatchForm(); await loadDrafts();
     showToast(`Delivery ${result.record.id} dispatched.`);
-  } catch (error) { showToast(error.message, true); }
+  } catch (error) { focusItemError(error.message); showToast(error.message, true); }
   finally { button.disabled = false; button.textContent = "Confirm Dispatch"; }
 });
 
@@ -414,7 +438,7 @@ function renderReceiveItems(record) {
         ${item.type === "BATCH" ? `<div><span>Batch</span><strong>${escapeHtml(item.batchNumber)}</strong></div><div><span>Size</span><strong>${escapeHtml(item.size)}</strong></div>` : ""}
         <div><span>Expected</span><strong>${item.quantity} ${escapeHtml(item.unit)}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} pieces` : ""}</strong></div><div><span>Previously Received</span><strong>${priorQuantity} ${escapeHtml(item.unit)}</strong></div><div><span>Outstanding</span><strong>${outstanding} ${escapeHtml(item.unit)}</strong></div>
       </div>
-      <div class="form-grid check-fields">
+      <div class="form-grid check-fields${complete ? " hidden" : ""}">
         <label>Quantity Received This Time (${escapeHtml(displayUnit(item.unit))})<input class="actual-quantity" type="number" inputmode="numeric" min="0" step="1" value="0" ${complete ? "readonly" : "required"}></label>
         ${item.piecesPerUnit ? `<label>Actual Pieces Per Bag<input class="actual-per-unit" type="number" inputmode="numeric" min="0" step="1" value="${item.piecesPerUnit}" ${complete ? "readonly" : "required"}></label>` : ""}
         ${item.type === "BATCH" ? (() => { const size = splitSize(item.size); return `<label>Batch Number Received<input class="actual-batch" inputmode="numeric" value="${escapeHtml(item.batchNumber)}" ${complete ? "readonly" : "required"}></label><fieldset class="size-entry"><legend>Size Received</legend><label>Thickness<input class="actual-thickness" inputmode="numeric" value="${size.thickness}" ${complete ? "readonly" : "required"}><small>Enter 23 for 0.23 mm</small></label><label>Width (mm)<input class="actual-width" type="number" inputmode="numeric" min="1" step="1" value="${size.width}" ${complete ? "readonly" : "required"}></label><label>Length (mm)<input class="actual-length" type="number" inputmode="numeric" min="1" step="1" value="${size.length}" ${complete ? "readonly" : "required"}></label><label>Stored Dimensions<input class="actual-stored-size stored-size" value="${escapeHtml(item.size)}" readonly></label></fieldset>`; })() : ""}
@@ -433,8 +457,34 @@ function renderReceiveItems(record) {
   });
   $$("#receiveItems .actual-thickness, #receiveItems .actual-length, #receiveItems .actual-width").forEach(input => input.addEventListener("input", () => { input.value = input.value.replace(/\D/g, ""); const card = input.closest(".receive-card"); const thickness = card.querySelector(".actual-thickness").value; const width = card.querySelector(".actual-width").value; const length = card.querySelector(".actual-length").value; card.querySelector(".actual-stored-size").value = thickness && width && length ? `0.${thickness}*${width}*${length}` : ""; }));
   $$("#receiveItems input, #receiveItems select").forEach(input => input.addEventListener("input", updateReceiveMatches));
+  renderReceivingAction(record);
+  restoreReceivingRecovery(record);
   updateReceiveMatches();
 }
+
+function renderReceivingAction(record) {
+  const totals = cumulativeTotals(record); const items = normalizedItems(record); const prior = new Map((record.receivedItems || []).map(item => [item.itemId, item]));
+  const actions = [];
+  items.forEach((item, index) => { const outstanding = Math.max(Number(item.quantity) - (totals.get(item.itemId) || 0), 0); if (outstanding) actions.push(`Item ${index + 1}: Receive ${outstanding} remaining ${displayUnit(item.unit)}.`); const issues = prior.get(item.itemId)?.discrepancies || []; issues.filter(issue => !["Item Missing", "Quantity Short"].includes(issue)).forEach(issue => actions.push(`Item ${index + 1}: Review unresolved ${issue}.`)); });
+  const heading = actions.some(action => action.includes("Receive ")) ? (record.receiptAttempts?.length ? "Receive Outstanding Balance" : "Record Goods Received") : actions.length ? "Review Unresolved Discrepancies" : "Record Goods Received";
+  const box = $("#receivingAction"); box.classList.remove("hidden"); box.innerHTML = `<h3>${heading}</h3>${actions.length ? `<ul>${actions.map(action => `<li>${escapeHtml(action)}</li>`).join("")}</ul>` : `<p>Check every item against the delivery order.</p>`}`;
+  $("#receiveForm [type=submit]").textContent = heading;
+}
+function receivingRecoveryKey(id) { return `receivingRecovery:${id}`; }
+function saveReceivingRecovery() {
+  if (!state.selectedDelivery) return; const form = $("#receiveForm");
+  const payload = { receivedBy: form.elements.receivedBy.value, receiptCondition: form.elements.receiptCondition.value, receivingRemarks: form.elements.receivingRemarks.value, items: $$("#receiveItems .receive-card").map(card => ({ quantity: card.querySelector(".actual-quantity")?.value || "0", present: card.querySelector(".item-present")?.checked || false, perUnit: card.querySelector(".actual-per-unit")?.value || "", batch: card.querySelector(".actual-batch")?.value || "", thickness: card.querySelector(".actual-thickness")?.value || "", width: card.querySelector(".actual-width")?.value || "", length: card.querySelector(".actual-length")?.value || "", issues: [...card.querySelectorAll(".additional-issue:checked")].map(input => input.value) })), savedAt: new Date().toISOString() };
+  localStorage.setItem(receivingRecoveryKey(state.selectedDelivery.id), JSON.stringify(payload));
+}
+function restoreReceivingRecovery(record) {
+  const raw = localStorage.getItem(receivingRecoveryKey(record.id)); if (!raw) return;
+  if (!confirm(`An unfinished receiving form for ${record.id} was found. Continue it?`)) { localStorage.removeItem(receivingRecoveryKey(record.id)); return; }
+  try { const saved = JSON.parse(raw); const form = $("#receiveForm"); form.elements.receivedBy.value = saved.receivedBy || ""; form.elements.receiptCondition.value = saved.receiptCondition || "Good"; form.elements.receivingRemarks.value = saved.receivingRemarks || ""; $$("#receiveItems .receive-card").forEach((card,index) => { const item = saved.items?.[index]; if (!item || card.querySelector(".actual-quantity")?.readOnly) return; card.querySelector(".actual-quantity").value = item.quantity; card.querySelector(".item-present").checked = item.present; if (card.querySelector(".actual-per-unit")) card.querySelector(".actual-per-unit").value = item.perUnit; if (card.querySelector(".actual-batch")) card.querySelector(".actual-batch").value = item.batch; ["thickness","width","length"].forEach(part => { const input = card.querySelector(`.actual-${part}`); if (input) input.value = item[part]; }); card.querySelectorAll(".additional-issue").forEach(input => input.checked = item.issues?.includes(input.value)); }); updateOnBehalf(); showToast("Unfinished receiving form restored. Signature must be entered again."); } catch { localStorage.removeItem(receivingRecoveryKey(record.id)); }
+}
+$("#receiveForm").addEventListener("input", event => { if (event.target.id === "deliveryId") return; clearTimeout(saveReceivingRecovery.timer); saveReceivingRecovery.timer = setTimeout(saveReceivingRecovery, 400); });
+$("#receiveForm").addEventListener("change", event => { if (event.target.id === "deliveryId") return; clearTimeout(saveReceivingRecovery.timer); saveReceivingRecovery.timer = setTimeout(saveReceivingRecovery, 100); });
+
+function pendingReceiptRequestId(id) { const key = `pendingReceiptRequestId:${id}`; let value = sessionStorage.getItem(key); if (!value) { value = crypto.randomUUID(); sessionStorage.setItem(key, value); } return value; }
 
 function cumulativeTotals(record) {
   const totals = new Map();
@@ -446,6 +496,7 @@ function cumulativeTotals(record) {
 
 function collectReceivedItems() {
   const expected = normalizedItems(state.selectedDelivery);
+  const priorReceived = new Map((state.selectedDelivery.receivedItems || []).map(item => [item.itemId, item]));
   return $$("#receiveItems .receive-card").map(card => {
     const item = expected.find(value => value.itemId === card.dataset.itemId);
     const present = card.querySelector(".item-present").checked;
@@ -463,8 +514,14 @@ function collectReceivedItems() {
     if (item.type === "BATCH" && actualSize !== item.size) discrepancies.push("Wrong Size");
     if (item.piecesPerUnit != null && quantityReceived > 0 && piecesPerUnitReceived !== Number(item.piecesPerUnit)) discrepancies.push("Incorrect Pieces Per Bag");
     card.querySelectorAll(".additional-issue:checked").forEach(input => discrepancies.push(input.value));
-    const matched = discrepancies.length === 0;
-    return { itemId: item.itemId, present: present || priorQuantity >= Number(item.quantity), quantityReceived, piecesPerUnitReceived, priorQuantity, cumulativeQuantity, actualBatchNumber, actualSize, matched, discrepancies, discrepancyReason: discrepancies.join("; ") };
+    const previousIssues = priorReceived.get(item.itemId)?.discrepancies || [];
+    const persistentIssues = [...previousIssues, ...discrepancies].filter((issue, index, all) => !["Item Missing", "Quantity Short"].includes(issue) && all.indexOf(issue) === index);
+    if (cumulativeQuantity < Number(item.quantity)) {
+      if (cumulativeQuantity === 0) persistentIssues.unshift("Item Missing");
+      if (!persistentIssues.includes("Quantity Short")) persistentIssues.push("Quantity Short");
+    }
+    const matched = persistentIssues.length === 0;
+    return { itemId: item.itemId, present: present || priorQuantity >= Number(item.quantity), quantityReceived, piecesPerUnitReceived, priorQuantity, cumulativeQuantity, actualBatchNumber, actualSize, matched, discrepancies: persistentIssues, discrepancyReason: persistentIssues.join("; ") };
   });
 }
 
@@ -504,14 +561,20 @@ $("#receiveForm").addEventListener("submit", async event => {
   data.completeWithDiscrepancy = !$("#completeWithDiscrepancyBox").classList.contains("hidden") && $("#completeWithDiscrepancy").checked;
   data.signature = signature;
   data.enteredOnBehalf = data.receivedBy !== config.user;
+  data.receiptRequestId = pendingReceiptRequestId(state.selectedDelivery.id);
+  data.recordVersion = Number(state.selectedDelivery.recordVersion || 1);
   delete data.deliveryId;
+  const reviewItems = receivedItems.map((item, index) => `<div class="received-item-line"><strong>Item ${index + 1}</strong><span>Receiving Now: ${item.quantityReceived}</span>${item.discrepancies.length ? `<span>Unresolved: <strong class="discrepancy-text">${item.discrepancies.map(escapeHtml).join(", ")}</strong></span>` : `<span>No discrepancy</span>`}</div>`).join("");
+  const approved = await requestFinalReview("Review Receiving Check", reviewTable([["Delivery ID", escapeHtml(state.selectedDelivery.id)], ["Receiving PIC", escapeHtml(data.receivedBy)], ["Condition", escapeHtml(data.receiptCondition)], ["Items", reviewItems], ["Remarks", escapeHtml(data.receivingRemarks || "None")], ["Final Result", data.completeWithDiscrepancy ? `<strong class="discrepancy-text">Complete With Recorded Discrepancies</strong>` : allMatched ? "Received" : "Remain Incomplete"]]));
+  if (!approved) return;
   const button = form.querySelector("[type=submit]"); button.disabled = true; button.textContent = "Saving…";
   try {
     const result = await api(`/records/${encodeURIComponent(state.selectedDelivery.id)}`, { method: "PATCH", body: JSON.stringify(data) });
     showToast(`Delivery marked ${displayStatus(result.record.status)}.`);
+    sessionStorage.removeItem(`pendingReceiptRequestId:${state.selectedDelivery.id}`); localStorage.removeItem(receivingRecoveryKey(state.selectedDelivery.id));
     form.reset(); $("#completeWithDiscrepancyBox").classList.add("hidden"); state.selectedDelivery = null; $("#deliverySummary").className = "record-summary empty"; $("#deliverySummary").textContent = "Select an open Delivery ID to view all items."; $("#receiveItems").innerHTML = ""; $("#receiveSignature").clearSignature(); await loadOpenDeliveries();
-  } catch (error) { showToast(error.message, true); }
-  finally { button.disabled = false; button.textContent = "Confirm Item Check"; }
+  } catch (error) { showToast(error.message, true); if (error.message.includes("updated by another user")) await loadOpenDeliveries(); }
+  finally { button.disabled = false; if (state.selectedDelivery) renderReceivingAction(state.selectedDelivery); else button.textContent = "Confirm Item Check"; }
 });
 
 async function loadRecords() {
@@ -547,7 +610,7 @@ $("#cancelForm").addEventListener("submit", async event => {
   const id = $("#cancelDeliveryId").value;
   button.disabled = true;
   try {
-    await api(`/records/${encodeURIComponent(id)}/cancel`, { method: "POST", body: JSON.stringify({ reason: $("#cancelReason").value.trim() }) });
+    await api(`/records/${encodeURIComponent(id)}/cancel`, { method: "POST", body: JSON.stringify({ reason: $("#cancelReason").value.trim(), recordVersion: Number(state.cancelRecord?.recordVersion || 1) }) });
     $("#cancelDialog").close(); state.cancelRecord = null; await loadRecords(); showToast(`Delivery ${id} cancelled and retained in Records.`);
   } catch (error) { showToast(error.message, true); }
   finally { button.disabled = false; }
@@ -577,7 +640,17 @@ function openRecordView(record) {
   const received = new Map((record.receivedItems || []).map(item => [item.itemId, item]));
   const attempts = record.receiptAttempts || [];
   const corrections = record.corrections || [];
+  const resolutions = record.discrepancyResolutions || [];
   const status = normalizedStatus(record.status);
+  const timeline = [
+    record.timeOut && { at: record.timeOut, text: `Dispatched by ${record.dispatchedBy || record.createdBy || "Unknown User"}` },
+    ...attempts.map((attempt,index) => ({ at: attempt.checkedAt, text: `Receiving Attempt ${index + 1} by ${attempt.checkedBy || "Unknown User"}: ${displayStatus(attempt.result)}` })),
+    ...resolutions.map(entry => ({ at: entry.resolvedAt, text: `${entry.resolution}: ${entry.discrepancy} (${entry.itemId}) — ${entry.reason || "No reason recorded"}` })),
+    ...corrections.map(change => ({ at: change.correctedAt, text: `Corrected ${correctionFieldLabels[change.field] || change.field} by ${change.correctedBy}: ${change.reason}` })),
+    record.cancelledAt && { at: record.cancelledAt, text: `Cancelled by ${record.cancelledBy}: ${record.cancellationReason}` }
+  ].filter(Boolean).sort((a,b) => new Date(a.at) - new Date(b.at));
+  const requiredActions = [];
+  items.forEach((item,index) => { const check = received.get(item.itemId) || {}; const receivedQuantity = Number(check.cumulativeQuantity ?? check.quantityReceived ?? 0); const outstanding = Math.max(Number(item.quantity) - receivedQuantity, 0); if (outstanding) requiredActions.push(`Item ${index + 1}: Receive ${outstanding} ${displayUnit(item.unit)}.`); (check.discrepancies || []).forEach(issue => requiredActions.push(`Item ${index + 1}: Resolve or accept ${issue}.`)); });
   let viewerQr = "";
   if (["IN_TRANSIT", "INCOMPLETE"].includes(status)) {
     const url = deliveryQrUrl(record.id); const qr = qrcode(0, "M"); qr.addData(url); qr.make();
@@ -593,10 +666,12 @@ function openRecordView(record) {
       <tr><th>Released By</th><td>${escapeHtml(record.releasedBy || "—")}</td><th>Entered By</th><td>${escapeHtml(record.dispatchedBy || record.createdBy || "—")}</td></tr>
       <tr><th>Dispatched</th><td>${formatDate(record.timeOut)}</td><th>Dispatch Remarks</th><td>${escapeHtml(record.remarks || "—")}</td></tr>
     </tbody></table></div></section>
+    ${requiredActions.length && !["RECEIVED","RECEIVED_WITH_DISCREPANCY","CANCELLED"].includes(status) ? `<section class="record-section"><div class="action-required"><h3>Action Required</h3><ul>${requiredActions.map(action => `<li>${escapeHtml(action)}</li>`).join("")}</ul></div></section>` : ""}
     <section class="record-section"><h3>Items (${items.length})</h3><div class="record-table-wrap"><table><thead><tr><th>#</th><th>Type</th><th>Batch / Size</th><th>Description</th><th>Expected</th><th>Received</th><th>Result</th></tr></thead><tbody>
       ${items.map((item, index) => { const check = received.get(item.itemId) || {}; const receivedQuantity = check.cumulativeQuantity ?? check.quantityReceived; return `<tr><td>${index + 1}</td><td>${item.type === "BATCH" ? "Tinplate Batch" : "Component"}</td><td>${item.type === "BATCH" ? `${escapeHtml(item.batchNumber)}<br>${escapeHtml(item.size)}` : "—"}</td><td>${escapeHtml(item.description)}</td><td>${item.quantity} ${escapeHtml(displayUnit(item.unit))}${item.piecesPerUnit ? ` × ${item.piecesPerUnit} Pieces` : ""}</td><td>${receivedQuantity == null ? "—" : `${receivedQuantity} ${escapeHtml(displayUnit(item.unit))}`}</td><td>${check.matched ? "Complete" : status === "RECEIVED_WITH_DISCREPANCY" ? `<span class="discrepancy-text">Completed With Discrepancy</span>` : status === "RECEIVED" ? "Complete" : "Outstanding"}</td></tr>`; }).join("")}
     </tbody></table></div></section>
     ${viewerQr}
+    <section class="record-section"><h3>Activity Timeline (${timeline.length})</h3><div class="activity-timeline">${timeline.length ? timeline.map(event => `<div class="timeline-event"><time>${formatDate(event.at)}</time><span>${escapeHtml(event.text)}</span></div>`).join("") : `<p class="empty-note">No activity recorded.</p>`}</div></section>
     <section class="record-section"><h3>Receiving History (${attempts.length})</h3>${attempts.length ? `<p class="empty-note">The latest attempt is open. Select any earlier attempt to view its details.</p><div class="receiving-history-list">${attempts.slice().reverse().map((attempt, reverseIndex) => { const attemptNumber = attempts.length - reverseIndex; const resultText = displayStatus(attempt.result || "—"); return `<details class="receiving-attempt" ${reverseIndex === 0 ? "open" : ""}><summary><span>Attempt ${attemptNumber} · ${formatDate(attempt.checkedAt)}&nbsp;&nbsp;·&nbsp;&nbsp;${resultText}</span></summary><div class="receiving-attempt-body"><div class="record-table-wrap"><table class="details-table"><tbody><tr><th>Receiving PIC</th><td>${escapeHtml(attempt.receivedBy || "—")}</td><th>Entered By</th><td>${escapeHtml(attempt.checkedBy || "—")}</td></tr><tr><th>Condition</th><td>${escapeHtml(attempt.condition || "—")}</td><th>Remarks</th><td>${escapeHtml(attempt.remarks || "—")}</td></tr><tr><th>Items Received</th><td colspan="3">${receiptItemsHtml(attempt, record)}</td></tr></tbody></table></div></div></details>`; }).join("")}</div>` : `<p class="empty-note">No receiving attempt has been recorded.</p>`}</section>
     <section class="record-section"><h3>Corrections (${corrections.length})</h3>${corrections.length ? `<div class="record-table-wrap"><table><thead><tr><th>Date & Time</th><th>Corrected By</th><th>Target</th><th>Field</th><th>Original</th><th>Corrected</th><th>Reason / Status</th></tr></thead><tbody>${corrections.map(change => `<tr><td>${formatDate(change.correctedAt)}</td><td>${escapeHtml(change.correctedBy || "—")}</td><td>${escapeHtml(change.target || "—")}</td><td>${escapeHtml(correctionFieldLabels[change.field] || change.field || "—")}</td><td>${escapeHtml(change.oldValue ?? "—")}</td><td>${escapeHtml(change.newValue ?? "—")}</td><td>${escapeHtml(change.reason || "—")}${change.statusBefore && change.statusAfter && change.statusBefore !== change.statusAfter ? `<br><strong>Status: ${escapeHtml(change.statusBefore.replaceAll("_", " "))} → ${escapeHtml(change.statusAfter.replaceAll("_", " "))}</strong>` : ""}</td></tr>`).join("")}</tbody></table></div>` : `<p class="empty-note">No corrections have been made.</p>`}</section>
     ${status === "CANCELLED" ? `<section class="record-section"><h3>Cancellation</h3><div class="reason-note"><strong>Cancelled By ${escapeHtml(record.cancelledBy || "—")}</strong><br>${formatDate(record.cancelledAt)}<br>${escapeHtml(record.cancellationReason || "No Reason Recorded")}</div></section>` : ""}`;
@@ -675,7 +750,7 @@ $("#correctionField").addEventListener("change", updateCorrectionValueControl);
 $("#closeCorrection").addEventListener("click", () => $("#correctionDialog").close());
 $("#correctionForm").addEventListener("submit", async event => {
   event.preventDefault(); const button = event.currentTarget.querySelector("[type=submit]"); button.disabled = true;
-  try { const field = $("#correctionField").value; const value = $("#correctionValue").value; if (field === "batchNumber" && !batchIsValid(value)) throw new Error("Enter at least three batch digits; the slash is inserted after the first two digits."); if (field === "size" && !sizeIsValid(value)) throw new Error("Thickness, width and length must all be positive whole numbers."); if (["quantity", "piecesPerUnit"].includes(field) && (!Number.isInteger(Number(value)) || Number(value) <= 0)) throw new Error("Corrected quantity must be a positive whole number."); await api(`/records/${encodeURIComponent($("#correctionDeliveryId").value)}/corrections`, { method: "POST", body: JSON.stringify({ target: $("#correctionTarget").value, field, value, reason: $("#correctionReason").value.trim() }) }); $("#correctionDialog").close(); await loadRecords(); showToast("Correction saved with its audit history."); } catch (error) { showToast(error.message, true); } finally { button.disabled = false; }
+  try { const field = $("#correctionField").value; const value = $("#correctionValue").value; if (field === "batchNumber" && !batchIsValid(value)) throw new Error("Enter at least three batch digits; the slash is inserted after the first two digits."); if (field === "size" && !sizeIsValid(value)) throw new Error("Thickness, width and length must all be positive whole numbers."); if (["quantity", "piecesPerUnit"].includes(field) && (!Number.isInteger(Number(value)) || Number(value) <= 0)) throw new Error("Corrected quantity must be a positive whole number."); await api(`/records/${encodeURIComponent($("#correctionDeliveryId").value)}/corrections`, { method: "POST", body: JSON.stringify({ target: $("#correctionTarget").value, field, value, reason: $("#correctionReason").value.trim(), recordVersion: Number(state.correctionRecord?.recordVersion || 1) }) }); $("#correctionDialog").close(); await loadRecords(); showToast("Correction saved with its audit history."); } catch (error) { showToast(error.message, true); } finally { button.disabled = false; }
 });
 
 function showQr(id) {
@@ -689,8 +764,12 @@ async function saveQrToPhone() { const blob = await qrPngBlob(); const objectUrl
 async function shareQrCode() {
   try {
     const file = await qrFile();
-    if (navigator.share && navigator.canShare?.({ files: [file] })) { await navigator.share({ title: `Delivery ${state.currentQrId}`, text: `Receiving QR code for delivery ${state.currentQrId}`, files: [file] }); return; }
-    if (navigator.share) { await navigator.share({ title: `Delivery ${state.currentQrId}`, text: `Open delivery ${state.currentQrId} for receiving`, url: deliveryQrUrl(state.currentQrId) }); return; }
+    const url = deliveryQrUrl(state.currentQrId);
+    const title = `Delivery ${state.currentQrId}`;
+    const text = `Open delivery ${state.currentQrId} for receiving:\n${url}`;
+    const completeShare = { title, text, url, files: [file] };
+    if (navigator.share && navigator.canShare?.(completeShare)) { await navigator.share(completeShare); return; }
+    if (navigator.share) { await navigator.share({ title, text, url }); return; }
     saveQrToPhone();
   } catch (error) { if (error.name !== "AbortError") { saveQrToPhone(); showToast("Sharing is unavailable on this browser, so the QR image was downloaded instead."); } }
 }
