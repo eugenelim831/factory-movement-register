@@ -179,9 +179,10 @@ function updateItemCard(card) {
   card.querySelectorAll(".size-thickness, .size-length, .size-width").forEach(input => input.required = isBatch);
   const quantity = card.querySelector(".item-quantity");
   const unit = card.querySelector(".item-unit");
-  if (isBatch) { unit.value = "sheets"; unit.disabled = true; quantity.step = "1"; quantity.min = "1"; quantity.inputMode = "numeric"; card.querySelector(".quantity-unit-hint").textContent = "(Sheets)"; }
-  else { unit.disabled = false; quantity.step = "1"; quantity.min = "1"; quantity.inputMode = "numeric"; card.querySelector(".quantity-unit-hint").textContent = ""; }
-  if (isBatch || unit.value === "sheets") enforceWholeNumber(quantity, 1);
+  if (isBatch) { unit.value = "blanks"; unit.disabled = true; quantity.step = "1"; quantity.min = "1"; quantity.inputMode = "numeric"; card.querySelector(".quantity-unit-hint").textContent = "(Blanks)"; }
+  else { if (!["pieces", "bags"].includes(unit.value)) unit.value = "pieces"; unit.disabled = false; quantity.step = "1"; quantity.min = "1"; quantity.inputMode = "numeric"; card.querySelector(".quantity-unit-hint").textContent = ""; }
+  card.querySelector(".unit-field").classList.toggle("hidden", isBatch);
+  enforceWholeNumber(quantity, 1);
   const isBag = card.querySelector(".item-unit").value === "bags";
   card.querySelector(".per-unit-field").classList.toggle("hidden", !isBag);
   card.querySelector(".pieces-per-unit").required = isBag;
@@ -201,7 +202,7 @@ function collectDispatchItems() {
     if (type === "BATCH" && !batchIsValid(batchNumber)) throw new Error(`Item ${index + 1}: enter at least three batch digits. The system inserts a slash after the first two digits.`);
     if (type === "BATCH" && !sizeIsValid(size)) throw new Error(`Item ${index + 1}: thickness, width and length must all be positive whole numbers.`);
     const quantity = Number(card.querySelector(".item-quantity").value);
-    if (!Number.isInteger(quantity) || quantity <= 0) throw new Error(`Item ${index + 1}: quantity must be a whole number of sheets or units.`);
+    if (!Number.isInteger(quantity) || quantity <= 0) throw new Error(`Item ${index + 1}: quantity must be a positive whole number.`);
     return {
       itemId: `ITEM-${index + 1}`,
       type,
@@ -209,7 +210,7 @@ function collectDispatchItems() {
       size: type === "BATCH" ? size : "",
       description: card.querySelector(".item-description").value.trim(),
       quantity,
-      unit: type === "BATCH" ? "sheets" : card.querySelector(".item-unit").value,
+      unit: type === "BATCH" ? "blanks" : card.querySelector(".item-unit").value,
       piecesPerUnit: card.querySelector(".item-unit").value === "bags" ? Number(card.querySelector(".pieces-per-unit").value) : null
     };
   });
@@ -223,7 +224,7 @@ function collectDraftItems() {
     size: composeSize(card),
     description: card.querySelector(".item-description").value.trim(),
     quantity: card.querySelector(".item-quantity").value ? Number(card.querySelector(".item-quantity").value) : null,
-    unit: card.querySelector(".item-type").value === "BATCH" ? "sheets" : card.querySelector(".item-unit").value,
+    unit: card.querySelector(".item-type").value === "BATCH" ? "blanks" : card.querySelector(".item-unit").value,
     piecesPerUnit: card.querySelector(".pieces-per-unit").value ? Number(card.querySelector(".pieces-per-unit").value) : null
   }));
 }
@@ -423,7 +424,7 @@ function renderReceiveItems(record) {
     </article>`;
   }).join("");
   $$("#receiveItems .actual-batch").forEach(input => input.addEventListener("input", () => { input.value = formatBatchDigits(input.value); }));
-  $$("#receiveItems .receive-card").forEach((card, index) => { if (normalizedItems(record)[index]?.unit === "sheets") enforceWholeNumber(card.querySelector(".actual-quantity"), 0); if (card.querySelector(".actual-per-unit")) enforceWholeNumber(card.querySelector(".actual-per-unit"), 1); });
+  $$("#receiveItems .receive-card").forEach(card => { enforceWholeNumber(card.querySelector(".actual-quantity"), 0); if (card.querySelector(".actual-per-unit")) enforceWholeNumber(card.querySelector(".actual-per-unit"), 1); });
   $$("#receiveItems .receive-card").forEach(card => {
     const present = card.querySelector(".item-present"); const quantity = card.querySelector(".actual-quantity");
     if (present.disabled) return;
@@ -617,7 +618,7 @@ function openCorrection(record) {
 function updateCorrectionFields() {
   const target = $("#correctionTarget").value;
   const item = normalizedItems(state.correctionRecord).find(value => value.itemId === target);
-  const fields = target === "DELIVERY" ? deliveryCorrectionFields : item?.type === "BATCH" ? ["batchNumber", "size", "description", "quantity", "unit"] : itemCorrectionFields;
+  const fields = target === "DELIVERY" ? deliveryCorrectionFields : item?.type === "BATCH" ? ["batchNumber", "size", "description", "quantity"] : itemCorrectionFields;
   $("#correctionField").innerHTML = fields.map(field => `<option value="${field}">${correctionFieldLabels[field]}</option>`).join("");
   updateCorrectionValueControl();
 }
@@ -626,7 +627,7 @@ const correctionOptions = {
   driverName: ["Maidin", "Deva", "Gopi"],
   vehicleNumber: ["WC 3268N", "WTL8236", "BMY3682"],
   releasedBy: ["Aung King", "Nadia", "Lina", "Lalit", "Yati"],
-  unit: ["pieces", "blanks", "bags", "sets", "pallets", "sheets"]
+  unit: ["pieces", "bags"]
 };
 function correctionCurrentValue() {
   const target = $("#correctionTarget").value;
@@ -652,12 +653,12 @@ function updateCorrectionValueControl() {
   let control;
   if (correctionOptions[field]) {
     control = document.createElement("select");
-    const values = field === "unit" && targetItem?.type === "BATCH" ? ["sheets"] : correctionOptions[field];
+    const values = correctionOptions[field];
     values.forEach(value => { const option = document.createElement("option"); option.value = value; option.textContent = value.charAt(0).toUpperCase() + value.slice(1); control.appendChild(option); });
     control.value = String(current);
   } else if (["quantity", "piecesPerUnit"].includes(field)) {
     control = document.createElement("input"); control.type = "number"; control.inputMode = "numeric"; control.min = "1"; control.step = "1"; control.value = current;
-    if (field === "piecesPerUnit" || targetItem?.unit === "sheets") enforceWholeNumber(control, 1);
+    enforceWholeNumber(control, 1);
   } else if (field === "batchNumber") {
     control = document.createElement("input"); control.type = "text"; control.inputMode = "numeric"; control.pattern = "[0-9/]+"; control.placeholder = "Enter digits only"; control.value = formatBatchDigits(current); control.addEventListener("input", () => control.value = formatBatchDigits(control.value));
   } else if (field === "size") {
