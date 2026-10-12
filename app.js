@@ -736,7 +736,7 @@ const correctionOptions = {
   direction: ["Store/Slitter → Power Press", "Power Press → Store/Slitter"],
   driverName: ["Maidin", "Deva", "Gopi"],
   vehicleNumber: ["WC 3268N", "WTL8236", "BMY3682"],
-  releasedBy: ["Aung King", "Nadia", "Lina", "Lalit", "Yati"],
+  releasedBy: ["Aung King", "Nadia", "Lina", "Yati", "Farouk"],
   unit: ["pieces", "bags"]
 };
 function correctionCurrentValue() {
